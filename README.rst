@@ -25,11 +25,26 @@ handling select_related and prefetch_reated, semi-automatically.
       )
   )
 
-SQL example ::
+SQL example
 
-  SELECT "userinfo"."id", "userinfo"."point", "userinfo"."ctime", "userinfo"."user_id", "user"."id", "user"."name", "user"."ctime" FROM "userinfo" INNER JOIN "user" ON ("userinfo"."user_id" = "user"."id") WHERE "userinfo"."point" > 0
-  SELECT ("team_users"."user_id") AS "_prefetch_related_val_user_id", "team"."id", "team"."name", "team"."price", "team"."ctime" FROM "team" INNER JOIN "team_users" ON ("team"."id" = "team_users"."team_id") WHERE "team_users"."user_id" IN (2)
-  SELECT "game"."id", "game"."team_id", "game"."name", "game"."price", "game"."ctime" FROM "game" WHERE ("game"."name" LIKE '%-a%' ESCAPE '\' AND "game"."team_id" IN (1, 2))
+.. code-block:: sql
+
+  SELECT
+   "userinfo"."id", "userinfo"."point", "userinfo"."ctime", "userinfo"."user_id",
+   "user"."id", "user"."name", "user"."ctime"
+  FROM "userinfo"
+  INNER JOIN "user" ON ("userinfo"."user_id" = "user"."id")
+  WHERE "userinfo"."point" > 0;
+  SELECT
+   ("team_users"."user_id") AS "_prefetch_related_val_user_id",
+   "team"."id", "team"."name", "team"."price", "team"."ctime"
+  FROM "team"
+  INNER JOIN "team_users" ON ("team"."id" = "team_users"."team_id")
+  WHERE "team_users"."user_id" IN (2);
+  SELECT
+  "game"."id", "game"."team_id", "game"."name", "game"."price", "game"."ctime"
+  FROM "game"
+  WHERE ("game"."name" LIKE '%-a%' ESCAPE '\' AND "game"."team_id" IN (1, 2));
 
 model
 
