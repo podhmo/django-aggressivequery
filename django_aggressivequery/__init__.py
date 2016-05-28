@@ -377,9 +377,10 @@ class AggressiveQuery(object):
     def _clone(self):
         return copy.copy(self)
 
-    def prefetch_filter(self, name, filter_fn):
+    def prefetch_filter(self, **conditions):
         new_qs = self._clone()
-        new_qs.optimizer.prefetch_filters[name].append(filter_fn)
+        for name, filter_fn in conditions.items():
+            new_qs.optimizer.prefetch_filters[name].append(filter_fn)
         return new_qs
 
     @cached_property

@@ -543,7 +543,7 @@ class FromQueryManyToManyTests(TestCase):
         ]:
             with self.subTest(msg=msg, before_count=before_count, after_count=after_count, before_customer_length=before_customer_length, qs_filter=qs_filter):
                 qs = qs_filter(m.Order.objects)
-                optimized = self._callFUT(qs, fields).prefetch_filter("customers", lambda qs: qs.filter(name="z"))
+                optimized = self._callFUT(qs, fields).prefetch_filter(customers=lambda qs: qs.filter(name="z"))
 
                 self.assertNotIn("JOIN", str(qs.query))
                 with self.assertNumQueries(before_count):

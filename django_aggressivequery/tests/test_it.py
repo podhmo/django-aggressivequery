@@ -33,7 +33,7 @@ class Tests(TestCase):
 
         with self.assertNumQueries(3):
             buf = []
-            optimized = optimized.prefetch_filter("customer__orders__items", lambda qs: qs.filter(name__contains="-a"))
+            optimized = optimized.prefetch_filter(customer__orders__items=lambda qs: qs.filter(name__contains="-a"))
             for karma in optimized:
                 buf.append("karma: {}, customer: {}".format(karma.point, karma.customer.name))
                 for order in karma.customer.orders.all():
@@ -51,7 +51,7 @@ karma: 10, customer: bar
 
         with self.assertNumQueries(3):
             buf = []
-            optimized = optimized.prefetch_filter("customer__orders__items", lambda qs: qs.filter(name__contains="-a"))
+            optimized = optimized.prefetch_filter(customer__orders__items=lambda qs: qs.filter(name__contains="-a"))
             for karma in optimized:
                 buf.append("karma: {}, customer: {}".format(karma.point, karma.customer.name))
                 for order in karma.customer.orders.all():

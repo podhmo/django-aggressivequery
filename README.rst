@@ -10,7 +10,7 @@ handling select_related and prefetch_reated, semi-automatically.
   (
       from_query(UserInfo.objects.filter(point__gt=0), ["user__teams__games"])
       .prefetch_filter(
-          "user__teams__games", lambda qs: qs.filter(name__contains="-a")
+          user__teams__games=lambda qs: qs.filter(name__contains="-a")
       )
   )
 
