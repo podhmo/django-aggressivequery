@@ -403,10 +403,19 @@ class AggressiveQuery(object):
         return self.inspector.pp(self.result)
 
 
-def from_query(qs, name_list, use_only=False, extractor=default_hint_extractor):
-    if not use_only:
-        name_list = ["*"] + ["{}__*".format(name) for name in name_list]
-    result = extractor.extract(qs.model, name_list)
+# todo: cache
+def from_query(qs, name_list, more_specific=False, extractor=default_hint_extractor):
+    specific_list = name_list if more_specific else more_specific_selection(name_list)
+    result = extractor.extract(qs.model, specific_list)
     inspector = Inspector(extractor.hintmap)
-    optimizer = QueryOptimizer(result, inspector, enable_selections=use_only)
+    optimizer = QueryOptimizer(result, inspector, enable_selections=more_specific)
     return AggressiveQuery(qs, optimizer)
+
+
+def more_specific_selection(name_list):
+    specific_list = ["*"]
+    for s in name_list:
+        xs = s.split("__")
+        for i in range(1, len(xs) + 1):
+            specific_list.append("{}__*".format("__".join(xs[:i])))
+    return specific_list

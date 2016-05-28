@@ -4,9 +4,9 @@ from . import models as m
 
 
 class Tests(TestCase):
-    def _callFUT(self, query, fields, use_only=False):
+    def _callFUT(self, query, fields, more_specific=False):
         from django_aggressivequery import from_query
-        return from_query(query, fields, use_only=use_only)
+        return from_query(query, fields, more_specific=more_specific)
 
     def setUp(self):
         foo = m.Customer.objects.create(name="foo")
@@ -29,24 +29,7 @@ class Tests(TestCase):
 
     def test_it__nested(self):
         qs = m.CustomerKarma.objects.filter(point__gt=0)
-        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"], use_only=True)
-
-        with self.assertNumQueries(3):
-            buf = []
-            for karma in optimized:
-                buf.append("karma: {}, customer: {}".format(karma.point, karma.customer.name))
-                for order in karma.customer.orders.all():
-                    buf.append("- order: {}, items: {}".format(order.name, ", ".join(item.name for item in order.items.all())))
-            expected = """\
-karma: 10, customer: bar
-- order: order-1, items: order-1-item-a, order-1-item-b, order-1-item-c
-- order: order-2, items: order-2-item-a, order-2-item-b"""
-            actual = "\n".join(buf)
-            self.assertEqual(expected, actual)
-
-    def test_it__nested2(self):
-        qs = m.CustomerKarma.objects.filter(point__gt=0)
-        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"], use_only=True)
+        optimized = self._callFUT(qs, ["customer__orders__items"])
 
         with self.assertNumQueries(3):
             buf = []
@@ -62,19 +45,45 @@ karma: 10, customer: bar
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)
 
-    def test_it__nested__not_use_only(self):
+    def test_it__nested__more_specific(self):
         qs = m.CustomerKarma.objects.filter(point__gt=0)
-        optimized = self._callFUT(qs, ["customer__orders__items"], use_only=False)
+        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"], more_specific=True)
 
         with self.assertNumQueries(3):
             buf = []
+            optimized = optimized.prefetch_filter("customer__orders__items", lambda qs: qs.filter(name__contains="-a"))
             for karma in optimized:
                 buf.append("karma: {}, customer: {}".format(karma.point, karma.customer.name))
                 for order in karma.customer.orders.all():
                     buf.append("- order: {}, items: {}".format(order.name, ", ".join(item.name for item in order.items.all())))
             expected = """\
 karma: 10, customer: bar
-- order: order-1, items: order-1-item-a, order-1-item-b, order-1-item-c
-- order: order-2, items: order-2-item-a, order-2-item-b"""
+- order: order-1, items: order-1-item-a
+- order: order-2, items: order-2-item-a"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
+
+    def test__dont_use__this_feature__more_specific(self):
+        from django.db.models import Prefetch
+        qs = m.CustomerKarma.objects.filter(point__gt=0)
+        with self.assertNumQueries(3):
+            buf = []
+            optimized = (
+                qs
+                .select_related("customer")
+                .only("point", "customer__name")
+                .prefetch_related(
+                    "customer__orders",
+                    Prefetch("customer__orders__items", queryset=m.Item.objects.filter(name__contains="-a").only("name", "order_id"))
+                )
+            )
+            for karma in optimized:
+                buf.append("karma: {}, customer: {}".format(karma.point, karma.customer.name))
+                for order in karma.customer.orders.all():
+                    buf.append("- order: {}, items: {}".format(order.name, ", ".join(item.name for item in order.items.all())))
+            expected = """\
+karma: 10, customer: bar
+- order: order-1, items: order-1-item-a
+- order: order-2, items: order-2-item-a"""
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)
