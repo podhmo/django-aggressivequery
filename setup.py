@@ -61,8 +61,8 @@ class MyTest(TestCommand):
 
 
 setup(name='django-aggressivequery',
-      version='0.2.1',
-      description='adding restriction of your api\'s return fields, in restframework',
+      version='0.1.0',
+      description='handling select_related and prefetch_reated, semi-automatically',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
           "Programming Language :: Python",
