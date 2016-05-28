@@ -227,14 +227,7 @@ class Inspector(object):
             return i
         else:
             return max(self.depth(r, i + 1) for r in result.subresults)
-    """\
-one_to_onerel customer <class 'django.db.models.fields.related.OneToOneField'>
-many_to_one order <class 'django.db.models.fields.related.ForeignKey'>
-onerel_to_one karma <class 'django.db.models.fields.reverse_related.OneToOneRel'>
-manyrel_to_many orders <class 'django.db.models.fields.reverse_related.ManyToManyRel'>
-many_to_manyrel customers <class 'django.db.models.fields.related.ManyToManyField'>
-one_to_many items <class 'django.db.models.fields.reverse_related.ManyToOneRel'>
-"""
+
     # todo: performance
     def collect_joins(self, result):
         # can join: one to one*, one* to one, many to one
@@ -373,17 +366,6 @@ class AggressiveQuery(object):
 
     def pp(self, out=sys.stdout):
         return self.inspector.pp(self.result)
-
-
-def revive_query(query_or_extraction):
-    if hasattr(query_or_extraction, "query"):
-        return query_or_extraction, True
-    elif isinstance(query_or_extraction, (list, tuple)) and not len(query_or_extraction) == 0:
-        pks = [x.pk for x in query_or_extraction]
-        # order by is dropped..
-        return query_or_extraction[0].__class__.objects.filter(pk__in=pks), True
-    else:
-        return query_or_extraction, False
 
 
 def from_query(qs, name_list, extractor=default_hint_extractor):
