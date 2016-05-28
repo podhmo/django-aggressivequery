@@ -14,6 +14,10 @@ Result = namedtuple(
     "Result",
     "name, fields, related, reverse_related, foreign_keys, subresults"
 )
+Pair = namedtuple(
+    "Pair",
+    "hint, result"
+)
 
 
 def asdict_result(self):

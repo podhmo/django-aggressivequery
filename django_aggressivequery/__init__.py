@@ -11,7 +11,7 @@ from django.utils.functional import cached_property
 from django.db.models.fields import related
 from django.db.models.fields import reverse_related
 from django.db.models import Prefetch
-from .structures import Hint, TmpResult, Result
+from .structures import Hint, TmpResult, Result, Pair
 
 
 logger = logging.getLogger(__name__)
@@ -237,9 +237,16 @@ one_to_many items <class 'django.db.models.fields.reverse_related.ManyToOneRel'>
         return itertools.chain(xs, ys)
 
     def collect_prefetchs(self, result):
-        xs = [h for h in result.related if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey))]
-        ys = [h for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.ManyToOneRel, reverse_related.ManyToManyRel))]
-        return itertools.chain(xs, ys)
+        matched = {}
+        for h in result.related:
+            if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey)):
+                matched[h.name] = h
+        for h in result.reverse_related:
+            if isinstance(h.field.rel, (reverse_related.ManyToOneRel, reverse_related.ManyToManyRel)):
+                matched[h.name] = h
+        for sr in result.subresults:
+            if sr.name in matched:
+                yield Pair(hint=matched[sr.name], result=sr)
 
     def collect_selections(self, result):
         xs = itertools.chain([f.name for f in result.fields], result.foreign_keys)
@@ -253,6 +260,10 @@ one_to_many items <class 'django.db.models.fields.reverse_related.ManyToOneRel'>
                 sub_fields = self.collect_selections(sr)
             ys.append(["{}__{}".format(sr.name, name) for name in sub_fields])
         return itertools.chain(xs, *ys)
+
+    def pp(self, result, out=sys.stdout):
+        d = result.asdict()
+        return out.write(json.dumps(d, indent=2))
 
 
 default_hint_extractor = HintExtractor()
@@ -285,31 +296,30 @@ class QueryOptimizer(object):
             prefetch_filters=copy.deepcopy(self.prefetch_filters)
         )
 
-    def optimize(self, qs):
-        return self._optimize_selections(
-            self._optimize_prefetch(
-                self._optimize_join(qs.all())
-            )
-        )
+    def optimize(self, qs, result=None):
+        result = result or self.result
+        qs = self._optimize_join(qs.all(), result)
+        qs = self._optimize_prefetch(qs, result)
+        qs = self._optimize_selections(qs, result)
+        return qs
 
-    def _optimize_selections(self, qs):
+    def _optimize_selections(self, qs, result):
         # todo: disable using only
-        fields = list(self.inspector.collect_selections(self.result))
+        fields = list(self.inspector.collect_selections(result))
         logger.debug("@selection, %r", fields)
         return qs.only(*fields)
 
-    def _optimize_join(self, qs):
+    def _optimize_join(self, qs, result):
         # todo: nested
-        join_targets = [h.name for h in self.inspector.collect_joins(self.result)]
+        join_targets = [h.name for h in self.inspector.collect_joins(result)]
         return reset_select_related(qs, join_targets)
 
-    def _optimize_prefetch(self, qs):
+    def _optimize_prefetch(self, qs, result):
         # todo: nested, settings filter lazy
         prefetch_targets = []
-        hints = list(self.inspector.collect_prefetchs(self.result))
-        print(hints, "#")
-        for h in hints:
-            init_qs = h.rel_model.objects.all()
+        pairs = self.inspector.collect_prefetchs(result)
+        for h, sr in pairs:
+            init_qs = self.optimize(h.rel_model.objects.all(), sr)
             fns = self.prefetch_filters[h.name]
             prefetch_qs = functools.reduce(lambda qs, f: f(qs), fns, init_qs)
             prefetch_targets.append(Prefetch(h.name, queryset=prefetch_qs))  # support to_attr?
@@ -353,15 +363,7 @@ class AggressiveQuery(object):
         return self.aggressive_queryset[k]
 
     def pp(self, out=sys.stdout):
-        d = self.result.asdict()
-        return out.write(json.dumps(d, indent=2))
-
-
-def from_query(qs, name_list, extractor=default_hint_extractor):
-    result = extractor.extract(qs.model, name_list)
-    inspector = Inspector(extractor.hintmap)
-    optimizer = QueryOptimizer(result, inspector)
-    return AggressiveQuery(qs, optimizer)
+        return self.inspector.pp(self.result)
 
 
 def revive_query(query_or_extraction):
@@ -373,3 +375,10 @@ def revive_query(query_or_extraction):
         return query_or_extraction[0].__class__.objects.filter(pk__in=pks), True
     else:
         return query_or_extraction, False
+
+
+def from_query(qs, name_list, extractor=default_hint_extractor):
+    result = extractor.extract(qs.model, name_list)
+    inspector = Inspector(extractor.hintmap)
+    optimizer = QueryOptimizer(result, inspector)
+    return AggressiveQuery(qs, optimizer)

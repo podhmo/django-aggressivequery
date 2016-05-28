@@ -537,23 +537,28 @@ class FromQueryManyToManyTests(TestCase):
         fields = ["xxxx", "name", "memo1", "customers__name"]
 
         prefetch = Prefetch("customers", queryset=m.Customer.objects.filter(name="z"))
-        for msg, before_count, after_count, qs_filter in [
-                ("with prefetch related", 2, 2, lambda qs: qs.all().prefetch_related(prefetch)),
-                # ("without prefetch related", 2, 2, lambda qs: qs.all()),
+        for msg, before_count, after_count, before_customer_length, qs_filter in [
+                ("with prefetch related", 2, 2, 1, lambda qs: qs.all().prefetch_related(prefetch)),
+                ("without prefetch related", 3, 2, 4, lambda qs: qs.all()),
         ]:
-            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, qs_filter=qs_filter):
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, before_customer_length=before_customer_length, qs_filter=qs_filter):
                 qs = qs_filter(m.Order.objects)
                 optimized = self._callFUT(qs, fields).prefetch_filter("customers", lambda qs: qs.filter(name="z"))
 
                 self.assertNotIn("JOIN", str(qs.query))
                 with self.assertNumQueries(before_count):
                     customers = [(o.id, o.name, c.id, c.name) for o in qs for c in o.customers.all()]
-                    self.assertEqual(len(customers), 1)
+                    self.assertEqual(len(customers), before_customer_length)
                     self.assertIn("memo3", str(qs.query))
 
                 self.assertNotIn("JOIN", str(optimized.query))
-                # todo: using only!!!
                 with self.assertNumQueries(after_count):
                     customers = [(o.id, o.name, c.id, c.name) for o in optimized for c in o.customers.all()]
                     self.assertEqual(len(customers), 1)
                     self.assertNotIn("memo3", str(optimized.query))
+
+                # using only, in prefetched.
+                for p in qs._prefetch_related_lookups:
+                    self.assertIn("memo3", str(p.queryset.query), msg="qs has memo3")
+                for p in optimized.to_query()._prefetch_related_lookups:
+                    self.assertNotIn("memo3", str(p.queryset.query), msg="optimized qs doesn't have memo3")
