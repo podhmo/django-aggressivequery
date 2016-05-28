@@ -4,9 +4,9 @@ from . import models as m
 
 
 class Tests(TestCase):
-    def _callFUT(self, query, fields):
+    def _callFUT(self, query, fields, use_only=False):
         from django_aggressivequery import from_query
-        return from_query(query, fields)
+        return from_query(query, fields, use_only=use_only)
 
     def setUp(self):
         foo = m.Customer.objects.create(name="foo")
@@ -29,7 +29,7 @@ class Tests(TestCase):
 
     def test_it__nested(self):
         qs = m.CustomerKarma.objects.filter(point__gt=0)
-        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"])
+        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"], use_only=True)
 
         with self.assertNumQueries(3):
             buf = []
@@ -46,7 +46,7 @@ karma: 10, customer: bar
 
     def test_it__nested2(self):
         qs = m.CustomerKarma.objects.filter(point__gt=0)
-        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"])
+        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"], use_only=True)
 
         with self.assertNumQueries(3):
             buf = []
@@ -59,5 +59,22 @@ karma: 10, customer: bar
 karma: 10, customer: bar
 - order: order-1, items: order-1-item-a
 - order: order-2, items: order-2-item-a"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
+
+    def test_it__nested__not_use_only(self):
+        qs = m.CustomerKarma.objects.filter(point__gt=0)
+        optimized = self._callFUT(qs, ["customer__orders__items"], use_only=False)
+
+        with self.assertNumQueries(3):
+            buf = []
+            for karma in optimized:
+                buf.append("karma: {}, customer: {}".format(karma.point, karma.customer.name))
+                for order in karma.customer.orders.all():
+                    buf.append("- order: {}, items: {}".format(order.name, ", ".join(item.name for item in order.items.all())))
+            expected = """\
+karma: 10, customer: bar
+- order: order-1, items: order-1-item-a, order-1-item-b, order-1-item-c
+- order: order-2, items: order-2-item-a, order-2-item-b"""
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)

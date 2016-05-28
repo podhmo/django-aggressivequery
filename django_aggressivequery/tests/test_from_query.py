@@ -6,7 +6,7 @@ from . import models as m
 class FromQueryOneToOneTests(TestCase):
     def _callFUT(self, query, fields):
         from django_aggressivequery import from_query
-        return from_query(query, fields)
+        return from_query(query, fields, use_only=True)
 
     def _makeCustomerStructure(self, structure):
         for customer_structure in structure:
@@ -158,7 +158,7 @@ class FromQueryOneToOneTests(TestCase):
 class FromQueryOneToManyTests(TestCase):
     def _callFUT(self, query, fields):
         from django_aggressivequery import from_query
-        return from_query(query, fields)
+        return from_query(query, fields, use_only=True)
 
     def _makeOrderStructure(self, structure):
         for order_structure in structure:
@@ -276,7 +276,7 @@ class FromQueryOneToManyTests(TestCase):
 class FromQueryManyToOneTests(TestCase):
     def _callFUT(self, query, fields):
         from django_aggressivequery import from_query
-        return from_query(query, fields)
+        return from_query(query, fields, use_only=True)
 
     def _makeCustomerStructure(self, structure):
         for customer_structure in structure:
@@ -387,7 +387,7 @@ class FromQueryManyToOneTests(TestCase):
 class FromQueryManyToManyTests(TestCase):
     def _callFUT(self, query, fields):
         from django_aggressivequery import from_query
-        return from_query(query, fields)
+        return from_query(query, fields, use_only=True)
 
     def _makeOrderCustomersStructure(self, structure):
         orders = [m.Order.objects.create(name=s["name"]) for s in structure["orders"]]

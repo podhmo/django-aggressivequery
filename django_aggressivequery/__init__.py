@@ -285,9 +285,10 @@ def reset_prefetch_related(qs, prefetch_targets):
 
 
 class QueryOptimizer(object):
-    def __init__(self, result, inspector, prefetch_filters=None):
+    def __init__(self, result, inspector, enable_selections=True, prefetch_filters=None):
         self.result = result
         self.inspector = inspector
+        self.enable_selections = enable_selections
         self.prefetch_filters = prefetch_filters or defaultdict(list)
 
     def __copy__(self):
@@ -304,7 +305,8 @@ class QueryOptimizer(object):
         return qs
 
     def _optimize_selections(self, qs, result, *externals):
-        # todo: disable using only
+        if not self.enable_selections:
+            return qs
         fields = list(itertools.chain(self.inspector.collect_selections(result), externals))
         logger.debug("@selection, %r", fields)
         return qs.only(*fields)
@@ -401,8 +403,10 @@ class AggressiveQuery(object):
         return self.inspector.pp(self.result)
 
 
-def from_query(qs, name_list, extractor=default_hint_extractor):
+def from_query(qs, name_list, use_only=False, extractor=default_hint_extractor):
+    if not use_only:
+        name_list = ["*"] + ["{}__*".format(name) for name in name_list]
     result = extractor.extract(qs.model, name_list)
     inspector = Inspector(extractor.hintmap)
-    optimizer = QueryOptimizer(result, inspector)
+    optimizer = QueryOptimizer(result, inspector, enable_selections=use_only)
     return AggressiveQuery(qs, optimizer)
