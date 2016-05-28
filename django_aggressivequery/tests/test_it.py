@@ -5,8 +5,8 @@ from . import models as m
 
 class OnlyQueryTests(TestCase):
     def _callFUT(self, query, fields):
-        from django_aggressivequery import safe_only
-        return safe_only(query, fields)
+        from django_aggressivequery import from_query
+        return from_query(query, fields)
 
     def _makeCustomerStructure(self, structure):
         for customer_structure in structure:

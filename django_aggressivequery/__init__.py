@@ -321,7 +321,7 @@ class AggressiveQuery(object):
         return out.write(json.dumps(d, indent=2))
 
 
-def safe_only(qs, name_list, extractor=default_hint_extractor):
+def from_query(qs, name_list, extractor=default_hint_extractor):
     result = extractor.extract(qs.model, name_list)
     return AggressiveQuery(qs, result, extractor.hintmap)
     # if qs.query.select_related or qs._prefetch_related_lookups:
