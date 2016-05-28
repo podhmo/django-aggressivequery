@@ -22,7 +22,7 @@ class InpectorCollectPrefetchTargetsTests(TestCase):
         result = extractor.extract(model, name_list)
         target = self._makeOne(extractor)
 
-        actual = list(target.collect_prefetchs(result))
+        actual = list(target.collect_prefetch_list(result))
         self.assertEqual(len(actual), 1)
         self.assertEqual(actual[0].hint.name, "customers")
         self.assertEqual([h.name for h in actual[0].result.fields], ["name"])

@@ -235,7 +235,7 @@ class Inspector(object):
         ys = [h for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.OneToOneRel, reverse_related.ManyToOneRel))]
         return itertools.chain(xs, ys)
 
-    def collect_prefetchs(self, result):
+    def collect_prefetch_list(self, result):
         matched = {}
         for h in result.related:
             if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey)):
@@ -279,7 +279,8 @@ def reset_select_related(qs, join_targets):
 def reset_prefetch_related(qs, prefetch_targets):
     # remove all and set new settings
     new_qs = qs.prefetch_related(None).prefetch_related(*prefetch_targets)
-    logger.debug("@prefetch: %r", prefetch_targets)
+    # logger.debug("@prefetch: %r", prefetch_targets)
+    logger.debug("@prefetch: %r", [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
     return new_qs
 
 
@@ -315,17 +316,49 @@ class QueryOptimizer(object):
 
     def _optimize_prefetch(self, qs, result):
         # todo: nested, settings filter lazy
+        lazy_prefetch_list = self.collect_lazy_prefetch_list_recusrive(result)
         prefetch_targets = []
-        pairs = self.inspector.collect_prefetchs(result)
-        for h, sr in pairs:
-            prefetch_qs = self._optimize_prefetch(h.rel_model.objects.all(), sr)
-            if h.rel_fk:
-                prefetch_qs = self._optimize_selections(prefetch_qs, sr, h.rel_fk)
-            else:
-                prefetch_qs = self._optimize_selections(prefetch_qs, sr)
-            prefetch_qs = functools.reduce(lambda qs, f: f(qs), self.prefetch_filters[h.name], prefetch_qs)
-            prefetch_targets.append(Prefetch(h.name, queryset=prefetch_qs))  # support to_attr?
+        for lazy_prefetch in lazy_prefetch_list:
+            filters = self.prefetch_filters[lazy_prefetch.name]
+            prefetch_targets.append(lazy_prefetch(filters, self._optimize_selections))
         return reset_prefetch_related(qs, prefetch_targets)
+
+    def collect_lazy_prefetch_list_recusrive(self, result):
+        pairs = self.inspector.collect_prefetch_list(result)
+        lazy_prefetch_list = []
+        for h, sr in pairs:
+            lazy_prefetch_list.append(LazyPrefetch(h.name, h, sr))  # support to_attr?
+            for sub_prefetch in self.collect_lazy_prefetch_list_recusrive(sr):
+                lazy_prefetch_list.append(sub_prefetch.prefixed(h.name))
+        return lazy_prefetch_list
+
+
+class LazyPrefetch(object):
+    def __init__(self, name, hint, result):
+        self.name = name
+        self.hint = hint
+        self.result = result
+
+    def prefixed(self, prefix):
+        return self.__class__(
+            "{}__{}".format(prefix, self.name),
+            self.hint, self.result
+        )
+
+    def __call__(self, filters, optimize_selection, to_attr=None):
+        prefetch_qs = self.queryset(filters)
+        prefetch_qs = self.selection(prefetch_qs, optimize_selection)
+        return Prefetch(self.name, queryset=prefetch_qs, to_attr=to_attr)
+
+    def queryset(self, filters):
+        qs = self.hint.rel_model.objects.all()  # default
+        return functools.reduce(lambda qs, f: f(qs), filters, qs)
+
+    def selection(self, qs, fn):
+        if self.hint.rel_fk:
+            return fn(qs, self.result, self.hint.rel_fk)
+        else:
+            return fn(qs, self.result)
 
 
 class AggressiveQuery(object):
