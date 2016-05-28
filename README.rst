@@ -7,7 +7,7 @@ handling select_related and prefetch_reated, semi-automatically.
 .. code-block:: python
 
   from django_aggressivequery import from_query
-  from_query(UserInfo.objects.filter(point__gt=0, ["user__teams__games"]).prefetch_filter("user__teams__games", lambda qs: qs.filter(name__contains="-a"))
+  from_query(UserInfo.objects.filter(point__gt=0), ["user__teams__games"]).prefetch_filter("user__teams__games", lambda qs: qs.filter(name__contains="-a"))
 
   # almost same means
   from django.db.models import Prefetch
