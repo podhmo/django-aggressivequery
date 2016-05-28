@@ -1,14 +1,16 @@
 # -*- coding:utf-8 -*-
 import copy
+import functools
 import itertools
 import sys
 import json
 import logging
 import django
 from collections import defaultdict, OrderedDict
+from django.utils.functional import cached_property
 from django.db.models.fields import related
 from django.db.models.fields import reverse_related
-from django.utils.functional import cached_property
+from django.db.models import Prefetch
 from .structures import Hint, TmpResult, Result
 
 
@@ -230,13 +232,13 @@ one_to_many items <class 'django.db.models.fields.reverse_related.ManyToOneRel'>
     # todo: performance
     def collect_joins(self, result):
         # can join: one to one*, one* to one, many to one
-        xs = [h.name for h in result.related if isinstance(h.field.field, (related.OneToOneField))]
-        ys = [h.name for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.OneToOneRel, reverse_related.ManyToOneRel))]
+        xs = [h for h in result.related if isinstance(h.field.field, (related.OneToOneField))]
+        ys = [h for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.OneToOneRel, reverse_related.ManyToOneRel))]
         return itertools.chain(xs, ys)
 
     def collect_prefetchs(self, result):
-        xs = [h.name for h in result.related if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey))]
-        ys = [h.name for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.ManyToOneRel, reverse_related.ManyToManyRel))]
+        xs = [h for h in result.related if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey))]
+        ys = [h for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.ManyToOneRel, reverse_related.ManyToManyRel))]
         return itertools.chain(xs, ys)
 
     def collect_selections(self, result):
@@ -260,21 +262,28 @@ default_hint_extractor = HintExtractor()
 def reset_select_related(qs, join_targets):
     # remove all and set new settings
     new_qs = qs.select_related(None).select_related(*join_targets)
-    logger.debug("@select_related, %r", new_qs.query.select_related)
+    logger.debug("@select_related: %r", join_targets)
     return new_qs
 
 
 def reset_prefetch_related(qs, prefetch_targets):
     # remove all and set new settings
     new_qs = qs.prefetch_related(None).prefetch_related(*prefetch_targets)
-    logger.debug("@prefetch, %r", new_qs._prefetch_related_lookups)
+    logger.debug("@prefetch: %r", prefetch_targets)
     return new_qs
 
 
 class QueryOptimizer(object):
-    def __init__(self, result, inspector):
+    def __init__(self, result, inspector, prefetch_filters=None):
         self.result = result
         self.inspector = inspector
+        self.prefetch_filters = prefetch_filters or defaultdict(list)
+
+    def __copy__(self):
+        return self.__class__(
+            self.result, self.inspector,
+            prefetch_filters=copy.deepcopy(self.prefetch_filters)
+        )
 
     def optimize(self, qs):
         return self._optimize_selections(
@@ -291,48 +300,51 @@ class QueryOptimizer(object):
 
     def _optimize_join(self, qs):
         # todo: nested
-        join_targets = list(self.inspector.collect_joins(self.result))
+        join_targets = [h.name for h in self.inspector.collect_joins(self.result)]
         return reset_select_related(qs, join_targets)
 
     def _optimize_prefetch(self, qs):
         # todo: nested, settings filter lazy
-        prefetch_targets = list(self.inspector.collect_prefetchs(self.result))
+        prefetch_targets = []
+        hints = list(self.inspector.collect_prefetchs(self.result))
+        print(hints, "#")
+        for h in hints:
+            init_qs = h.rel_model.objects.all()
+            fns = self.prefetch_filters[h.name]
+            prefetch_qs = functools.reduce(lambda qs, f: f(qs), fns, init_qs)
+            prefetch_targets.append(Prefetch(h.name, queryset=prefetch_qs))  # support to_attr?
         return reset_prefetch_related(qs, prefetch_targets)
 
 
 class AggressiveQuery(object):
-    def __init__(self, queryset, result, inspector):
+    def __init__(self, queryset, optimizer):
         self.source_queryset = queryset
-        self.result = result
-        self.inspector = inspector
-        self.prefetch_filters = defaultdict(list)
-        self.optimizer = QueryOptimizer(self.result, self.inspector)
+        self.optimizer = optimizer
 
     def __copy__(self):
-        new_query = AggressiveQuery(
+        return AggressiveQuery(
             self.source_queryset.all(),
-            self.result,
-            self.inspector,
+            copy.copy(self.optimizer)
         )
-        new_query.prefetch_filters = copy.copy(self.prefetch_filters)
-        return new_query
 
     def _clone(self):
         return copy.copy(self)
 
     def prefetch_filter(self, name, filter_fn):
-        return self  # todo: implementation
+        new_qs = self._clone()
+        new_qs.optimizer.prefetch_filters[name].append(filter_fn)
+        return new_qs
 
     @cached_property
     def aggressive_queryset(self):
         return self.optimizer.optimize(self.source_queryset)
 
+    def to_query(self):
+        return self.aggressive_queryset
+
     @property
     def query(self):
         return self.aggressive_queryset.query
-
-    def __getattr__(self, k):
-        return getattr(self.aggressive_queryset, k)
 
     def __iter__(self):
         return iter(self.aggressive_queryset)
@@ -348,17 +360,8 @@ class AggressiveQuery(object):
 def from_query(qs, name_list, extractor=default_hint_extractor):
     result = extractor.extract(qs.model, name_list)
     inspector = Inspector(extractor.hintmap)
-    return AggressiveQuery(qs, result, inspector)
-    # if qs.query.select_related or qs._prefetch_related_lookups:
-    #     qs = qs._clone()
-    #     s = set(pair.for_join)
-    #     s.update(pair.for_select)
-    #     if qs.query.select_related and hasattr(qs.query.select_related, "items"):
-    #         qs.query.select_related = {k: v for k, v in qs.query.select_related.items() if k in s}
-    #         s.update(qs.query.select_related.keys())
-    #     if qs._prefetch_related_lookups:
-    #         qs._prefetch_related_lookups = [k for k in qs._prefetch_related_lookups if k in s]
-    # return qs.only(*pair.for_select)
+    optimizer = QueryOptimizer(result, inspector)
+    return AggressiveQuery(qs, optimizer)
 
 
 def revive_query(query_or_extraction):

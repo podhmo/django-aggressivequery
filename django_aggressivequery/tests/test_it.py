@@ -511,7 +511,7 @@ class FromQueryManyToManyTests(TestCase):
 
                 self.assertNotIn("JOIN", str(optimized.query))
                 with self.assertNumQueries(after_count):
-                    optimized = optimized.filter(customers__name="z")
+                    optimized = optimized.to_query().filter(customers__name="z")
                     customers = [(o.id, o.name, c.id, c.name) for o in optimized for c in o.customers.all()]
                     self.assertEqual(len(customers), 3)
                     self.assertIn("memo3", str(qs.query))
@@ -534,7 +534,7 @@ class FromQueryManyToManyTests(TestCase):
             ]
         }
         self._makeOrderCustomersStructure(structure)
-        fields = ["xxxx", "name", "memo1"]
+        fields = ["xxxx", "name", "memo1", "customers__name"]
 
         prefetch = Prefetch("customers", queryset=m.Customer.objects.filter(name="z"))
         for msg, before_count, after_count, qs_filter in [
@@ -543,7 +543,7 @@ class FromQueryManyToManyTests(TestCase):
         ]:
             with self.subTest(msg=msg, before_count=before_count, after_count=after_count, qs_filter=qs_filter):
                 qs = qs_filter(m.Order.objects)
-                optimized = self._callFUT(qs, fields).prefetch_filter(customers__name="z")
+                optimized = self._callFUT(qs, fields).prefetch_filter("customers", lambda qs: qs.filter(name="z"))
 
                 self.assertNotIn("JOIN", str(qs.query))
                 with self.assertNumQueries(before_count):
@@ -551,9 +551,9 @@ class FromQueryManyToManyTests(TestCase):
                     self.assertEqual(len(customers), 1)
                     self.assertIn("memo3", str(qs.query))
 
-                # self.assertNotIn("JOIN", str(optimized.query))
+                self.assertNotIn("JOIN", str(optimized.query))
+                # todo: using only!!!
                 with self.assertNumQueries(after_count):
                     customers = [(o.id, o.name, c.id, c.name) for o in optimized for c in o.customers.all()]
-                    print(customers)
-                    # self.assertEqual(len(customers), 1)
-                    # self.assertIn("memo3", str(qs.query))
+                    self.assertEqual(len(customers), 1)
+                    self.assertNotIn("memo3", str(optimized.query))
