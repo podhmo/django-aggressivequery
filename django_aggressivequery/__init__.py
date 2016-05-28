@@ -276,6 +276,9 @@ class AggressiveQuery(object):
         self.result = result
         self.inspector = Inspector(hintmap)
 
+    def prefetch_filter(self, **condition):
+        return self  # todo: implementation
+
     @property
     def query(self):
         return self.aggressive_queryset.query

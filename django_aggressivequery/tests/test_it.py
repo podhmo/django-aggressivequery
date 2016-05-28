@@ -383,67 +383,177 @@ class FromQueryManyToOneTests(TestCase):
                     self.assertEqual(len(positions), 5)
                     self.assertNotIn("customer.", str(optimized.query))
 
-    # def test__many_to_one__with_join(self):
-    #     fields = ["xxxx", "name", "memo1", "order__name", "order__memo2", "order__yyyy"]
-    #     qs = m.Item.objects.all().select_related("order")
 
-    #     self.assertIn("JOIN", str(qs.query))
-    #     optimized = self._callFUT(qs, fields)
-    #     self.assertIn("JOIN", str(optimized.query))
+class FromQueryManyToManyTests(TestCase):
+    def _callFUT(self, query, fields):
+        from django_aggressivequery import from_query
+        return from_query(query, fields)
 
-    #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-    #     self.assertNotIn("memo3", str(optimized.query))
+    def _makeOrderCustomersStructure(self, structure):
+        orders = [m.Order.objects.create(name=s["name"]) for s in structure["orders"]]
+        customers = [m.Customer.objects.create(name=s["name"]) for s in structure["customers"]]
+        for xref in structure["relations"]:
+            orders[xref["order"]].customers.add(customers[xref["customer"]])
+        for o in orders:
+            o.save()
 
-    # def test__many_to_one__without_join(self):
-    #     fields = ["xxxx", "name", "memo1"]
-    #     qs = m.Item.objects.all().select_related("order")
+    def test__many_to_many__prefetch(self):
+        structure = {
+            "orders": [
+                {"name": "A"},
+                {"name": "B"},
+            ],
+            "customers": [
+                {"name": "x"},
+                {"name": "y"},
+                {"name": "z"},
+            ],
+            "relations": [
+                {"order": 0, "customer": 0}, {"order": 0, "customer": 1}, {"order": 0, "customer": 2},
+                {"order": 1, "customer": 0}
+            ]
+        }
+        self._makeOrderCustomersStructure(structure)
+        fields = ["xxxx", "name", "memo1", "customers__name", "customers__memo2", "customers__yyyy"]
 
-    #     self.assertIn("JOIN", str(qs.query))
-    #     optimized = self._callFUT(qs, fields)
-    #     self.assertNotIn("JOIN", str(optimized.query))
-    #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-    #     self.assertNotIn("memo3", str(optimized.query))
+        for msg, before_count, after_count, qs_filter in [
+                ("with prefetch related", 2, 2, lambda qs: qs.all().prefetch_related("customers")),
+                ("without prefetch related", 3, 2, lambda qs: qs.all()),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, qs_filter=qs_filter):
+                qs = qs_filter(m.Order.objects)
+                optimized = self._callFUT(qs, fields)
 
-    # def test__many_to_one__with_join__by_filter(self):
-    #     fields = ["xxxx", "name", "memo1"]
-    #     qs = m.Item.objects.all().filter(order__name="foo")
+                self.assertNotIn("JOIN", str(qs.query))
+                with self.assertNumQueries(before_count):
+                    customers = [(o.id, o.name, p.id, p.name) for o in qs for p in o.customers.all()]
+                    self.assertEqual(len(customers), 4)
+                    self.assertIn("memo3", str(qs.query))
 
-    #     self.assertIn("JOIN", str(qs.query))
-    #     optimized = self._callFUT(qs, fields)
-    #     self.assertIn("JOIN", str(optimized.query))
-    #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-    #     self.assertNotIn("memo3", str(optimized.query))
+                self.assertNotIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    customers = [(o.id, o.name, p.id, p.name) for o in optimized for p in o.customers.all()]
+                    self.assertEqual(len(customers), 4)
+                    self.assertIn("memo3", str(qs.query))
 
-    # def test__many_to_many__with_prefetch(self):
-    #     fields = ["xxxx", "name", "memo1", "customers__name", "customers__memo2", "customers__yyyy"]
-    #     qs = m.Order.objects.all().prefetch_related("customers")
+    def test__many_to_many__deprefetch(self):
+        structure = {
+            "orders": [
+                {"name": "A"},
+                {"name": "B"},
+            ],
+            "customers": [
+                {"name": "x"},
+                {"name": "y"},
+                {"name": "z"},
+            ],
+            "relations": [
+                {"order": 0, "customer": 0}, {"order": 0, "customer": 1}, {"order": 0, "customer": 2},
+                {"order": 1, "customer": 0}
+            ]
+        }
+        self._makeOrderCustomersStructure(structure)
+        fields = ["xxxx", "name", "memo1"]
 
-    #     self.assertNotIn("JOIN", str(qs.query))
-    #     optimized = self._callFUT(qs, fields)
-    #     self.assertNotIn("JOIN", str(optimized.query))
+        for msg, before_count, after_count, qs_filter in [
+                ("with prefetch related", 2, 1, lambda qs: qs.all().prefetch_related("customers")),
+                ("without prefetch related", 1, 1, lambda qs: qs.all()),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, qs_filter=qs_filter):
+                qs = qs_filter(m.Order.objects)
+                optimized = self._callFUT(qs, fields)
 
-    #     self.assertEqual(optimized._prefetch_related_lookups, ["customers"])
-    #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-    #     self.assertNotIn("memo3", str(optimized.query))
+                self.assertNotIn("JOIN", str(qs.query))
+                with self.assertNumQueries(before_count):
+                    customers = [(o.id, o.name,) for o in qs]
+                    self.assertEqual(len(customers), 2)
+                    self.assertIn("memo3", str(qs.query))
 
-    # def test__many_to_many__without_prefetch(self):
-    #     fields = ["xxxx", "name", "memo1"]
-    #     qs = m.Order.objects.all().prefetch_related("customers")
+                self.assertNotIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    customers = [(o.id, o.name,) for o in optimized]
+                    self.assertEqual(len(customers), 2)
+                    self.assertIn("memo3", str(qs.query))
 
-    #     self.assertNotIn("JOIN", str(qs.query))
-    #     optimized = self._callFUT(qs, fields)
-    #     self.assertNotIn("JOIN", str(optimized.query))
+    def test__many_to_many__deprefetch__after_filter(self):
+        structure = {
+            "orders": [
+                {"name": "A"},
+                {"name": "B"},
+            ],
+            "customers": [
+                {"name": "x"},
+                {"name": "y"},
+                {"name": "z"},
+            ],
+            "relations": [
+                {"order": 0, "customer": 0}, {"order": 0, "customer": 1}, {"order": 0, "customer": 2},
+                {"order": 1, "customer": 0}
+            ]
+        }
+        self._makeOrderCustomersStructure(structure)
+        fields = ["xxxx", "name", "memo1"]
 
-    #     self.assertEqual(optimized._prefetch_related_lookups, [])
-    #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-    #     self.assertNotIn("memo3", str(optimized.query))
+        for msg, before_count, after_count, qs_filter in [
+                ("with prefetch related", 2, 2, lambda qs: qs.all().prefetch_related("customers")),
+                ("without prefetch related", 2, 2, lambda qs: qs.all()),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, qs_filter=qs_filter):
+                qs = qs_filter(m.Order.objects)
+                optimized = self._callFUT(qs, fields)
 
-    # def test__many_to_many__with_join__by_filter(self):
-    #     fields = ["xxxx", "name", "memo1", "customers__memo2"]
-    #     qs = m.Order.objects.all().prefetch_related("customers").filter(customers__name="foo")
+                self.assertNotIn("JOIN", str(qs.query))
+                with self.assertNumQueries(before_count):
+                    qs = qs.filter(customers__name="z")
+                    customers = [(o.id, o.name, c.id, c.name) for o in qs for c in o.customers.all()]
+                    self.assertEqual(len(customers), 3)
+                    self.assertIn("memo3", str(qs.query))
 
-    #     self.assertIn("JOIN", str(qs.query))
-    #     optimized = self._callFUT(qs, fields)
-    #     self.assertIn("JOIN", str(optimized.query))
-    #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-    #     self.assertNotIn("memo3", str(optimized.query))
+                self.assertNotIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    optimized = optimized.filter(customers__name="z")
+                    customers = [(o.id, o.name, c.id, c.name) for o in optimized for c in o.customers.all()]
+                    self.assertEqual(len(customers), 3)
+                    self.assertIn("memo3", str(qs.query))
+
+    def test__many_to_many__deprefetch__after_filter2(self):
+        from django.db.models import Prefetch
+        structure = {
+            "orders": [
+                {"name": "A"},
+                {"name": "B"},
+            ],
+            "customers": [
+                {"name": "x"},
+                {"name": "y"},
+                {"name": "z"},
+            ],
+            "relations": [
+                {"order": 0, "customer": 0}, {"order": 0, "customer": 1}, {"order": 0, "customer": 2},
+                {"order": 1, "customer": 0}
+            ]
+        }
+        self._makeOrderCustomersStructure(structure)
+        fields = ["xxxx", "name", "memo1"]
+
+        prefetch = Prefetch("customers", queryset=m.Customer.objects.filter(name="z"))
+        for msg, before_count, after_count, qs_filter in [
+                ("with prefetch related", 2, 2, lambda qs: qs.all().prefetch_related(prefetch)),
+                # ("without prefetch related", 2, 2, lambda qs: qs.all()),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, qs_filter=qs_filter):
+                qs = qs_filter(m.Order.objects)
+                optimized = self._callFUT(qs, fields).prefetch_filter(customers__name="z")
+
+                self.assertNotIn("JOIN", str(qs.query))
+                with self.assertNumQueries(before_count):
+                    customers = [(o.id, o.name, c.id, c.name) for o in qs for c in o.customers.all()]
+                    self.assertEqual(len(customers), 1)
+                    self.assertIn("memo3", str(qs.query))
+
+                # self.assertNotIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    customers = [(o.id, o.name, c.id, c.name) for o in optimized for c in o.customers.all()]
+                    print(customers)
+                    # self.assertEqual(len(customers), 1)
+                    # self.assertIn("memo3", str(qs.query))
