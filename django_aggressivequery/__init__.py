@@ -1,4 +1,5 @@
 # -*- coding:utf-8 -*-
+import copy
 import itertools
 import sys
 import json
@@ -270,31 +271,10 @@ def reset_prefetch_related(qs, prefetch_targets):
     return new_qs
 
 
-class AggressiveQuery(object):
-    def __init__(self, queryset, result, hintmap):
-        self.source_queryset = queryset
+class QueryOptimizer(object):
+    def __init__(self, result, inspector):
         self.result = result
-        self.inspector = Inspector(hintmap)
-
-    def prefetch_filter(self, **condition):
-        return self  # todo: implementation
-
-    @property
-    def query(self):
-        return self.aggressive_queryset.query
-
-    def __getattr__(self, k):
-        return getattr(self.aggressive_queryset, k)
-
-    def __iter__(self):
-        return iter(self.aggressive_queryset)
-
-    def __getitem__(self, k):
-        return self.aggressive_queryset[k]
-
-    @cached_property
-    def aggressive_queryset(self):
-        return self.optimize(self.source_queryset)
+        self.inspector = inspector
 
     def optimize(self, qs):
         return self._optimize_selections(
@@ -319,6 +299,47 @@ class AggressiveQuery(object):
         prefetch_targets = list(self.inspector.collect_prefetchs(self.result))
         return reset_prefetch_related(qs, prefetch_targets)
 
+
+class AggressiveQuery(object):
+    def __init__(self, queryset, result, inspector):
+        self.source_queryset = queryset
+        self.result = result
+        self.inspector = inspector
+        self.prefetch_filters = defaultdict(list)
+        self.optimizer = QueryOptimizer(self.result, self.inspector)
+
+    def __copy__(self):
+        new_query = AggressiveQuery(
+            self.source_queryset.all(),
+            self.result,
+            self.inspector,
+        )
+        new_query.prefetch_filters = copy.copy(self.prefetch_filters)
+        return new_query
+
+    def _clone(self):
+        return copy.copy(self)
+
+    def prefetch_filter(self, name, filter_fn):
+        return self  # todo: implementation
+
+    @cached_property
+    def aggressive_queryset(self):
+        return self.optimizer.optimize(self.source_queryset)
+
+    @property
+    def query(self):
+        return self.aggressive_queryset.query
+
+    def __getattr__(self, k):
+        return getattr(self.aggressive_queryset, k)
+
+    def __iter__(self):
+        return iter(self.aggressive_queryset)
+
+    def __getitem__(self, k):
+        return self.aggressive_queryset[k]
+
     def pp(self, out=sys.stdout):
         d = self.result.asdict()
         return out.write(json.dumps(d, indent=2))
@@ -326,7 +347,8 @@ class AggressiveQuery(object):
 
 def from_query(qs, name_list, extractor=default_hint_extractor):
     result = extractor.extract(qs.model, name_list)
-    return AggressiveQuery(qs, result, extractor.hintmap)
+    inspector = Inspector(extractor.hintmap)
+    return AggressiveQuery(qs, result, inspector)
     # if qs.query.select_related or qs._prefetch_related_lookups:
     #     qs = qs._clone()
     #     s = set(pair.for_join)
