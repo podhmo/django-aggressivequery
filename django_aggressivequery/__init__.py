@@ -68,20 +68,24 @@ class HintMap(object):
             rel_name = None
             is_reverse_related = False
             rel_model = None
+            rel_fk = None
             if is_relation:
                 if hasattr(f, "rel_class"):
                     is_reverse_related = True
                     rel_name = f.rel.get_accessor_name()
                     rel_model = f.rel.model
+                    rel_fk = getattr(f.rel, "attname", None)
                 else:
                     rel_name = f.field.name
                     rel_model = f.field.model
+                    rel_fk = getattr(f.field, "attname", None)
             d[f.name] = Hint(name=name,
                              is_relation=is_relation,
                              is_reverse_related=is_reverse_related,
                              rel_name=rel_name,
                              rel_model=rel_model,
-                             defer_name=defer_name,
+                             rel_fk=rel_fk,
+                             defer_name=defer_name,  # hmm
                              field=f)
             # hmm. supporting accessor_name? (e.g. `customerposition_set`)
             if hasattr(f, "get_accessor_name"):
@@ -130,10 +134,12 @@ class HintExtractor(object):
 
             if h.defer_name is not None and not h.field.many_to_many:
                 result.foreign_keys.append(h.defer_name)
+
             if h.is_reverse_related:
                 result.reverse_related.append(h)
             else:
                 result.related.append(h)
+
         for sr in self.seq(tmp_result.subresults, key=lambda r: r.name):
             result.subresults.append(self.classify(sr))
         return result
@@ -303,9 +309,9 @@ class QueryOptimizer(object):
         qs = self._optimize_selections(qs, result)
         return qs
 
-    def _optimize_selections(self, qs, result):
+    def _optimize_selections(self, qs, result, *externals):
         # todo: disable using only
-        fields = list(self.inspector.collect_selections(result))
+        fields = list(itertools.chain(self.inspector.collect_selections(result), externals))
         logger.debug("@selection, %r", fields)
         return qs.only(*fields)
 
@@ -319,9 +325,12 @@ class QueryOptimizer(object):
         prefetch_targets = []
         pairs = self.inspector.collect_prefetchs(result)
         for h, sr in pairs:
-            init_qs = self.optimize(h.rel_model.objects.all(), sr)
-            fns = self.prefetch_filters[h.name]
-            prefetch_qs = functools.reduce(lambda qs, f: f(qs), fns, init_qs)
+            prefetch_qs = self._optimize_prefetch(h.rel_model.objects.all(), sr)
+            if h.rel_fk:
+                prefetch_qs = self._optimize_selections(prefetch_qs, sr, h.rel_fk)
+            else:
+                prefetch_qs = self._optimize_selections(prefetch_qs, sr)
+            prefetch_qs = functools.reduce(lambda qs, f: f(qs), self.prefetch_filters[h.name], prefetch_qs)
             prefetch_targets.append(Prefetch(h.name, queryset=prefetch_qs))  # support to_attr?
         return reset_prefetch_related(qs, prefetch_targets)
 

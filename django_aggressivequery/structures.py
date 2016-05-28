@@ -4,7 +4,7 @@ from collections import namedtuple
 
 Hint = namedtuple(
     "Hint",
-    "name, is_relation, is_reverse_related, rel_name, defer_name, rel_model, field"
+    "name, is_relation, is_reverse_related, rel_name, rel_fk, rel_model, defer_name, field"
 )
 TmpResult = namedtuple(
     "TmpResult",

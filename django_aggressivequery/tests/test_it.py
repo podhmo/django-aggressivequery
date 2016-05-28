@@ -79,7 +79,7 @@ class FromQueryOneToOneTests(TestCase):
         self._makeCustomerStructure(structure)
         for msg, before_count, after_count, has_join, qs_filter in [
                 ("with select related", 1, 1, True, lambda qs: qs.all().select_related("karma")),
-                ("without select related", 1, 1, False, lambda qs: qs.all()),
+                ("without select related", 3, 1, False, lambda qs: qs.all()),
         ]:
             with self.subTest(msg=msg, before_count=before_count, after_count=after_count, has_join=has_join, qs_filter=qs_filter):
                 qs = qs_filter(m.Customer.objects)
@@ -88,13 +88,13 @@ class FromQueryOneToOneTests(TestCase):
 
                 self.assertEqual("JOIN" in str(qs.query), has_join)
                 with self.assertNumQueries(before_count):
-                    customers = [(c.id, c.name) for c in qs]
+                    customers = [(c.id, c.name, c.karma.point) for c in qs]
                     self.assertEqual(len(customers), 2)
                     self.assertIn("memo3", str(qs.query))
 
                 self.assertIn("JOIN", str(optimized.query))
                 with self.assertNumQueries(after_count):
-                    customers = [(c.id, c.name) for c in optimized]
+                    customers = [(c.id, c.name, c.karma.point) for c in optimized]
                     self.assertEqual(len(customers), 2)
 
                     # django's limitation
@@ -516,7 +516,7 @@ class FromQueryManyToManyTests(TestCase):
                     self.assertEqual(len(customers), 3)
                     self.assertIn("memo3", str(qs.query))
 
-    def test__many_to_many__deprefetch__after_filter2(self):
+    def test__many_to_many__prefetch__after_filter(self):
         from django.db.models import Prefetch
         structure = {
             "orders": [
