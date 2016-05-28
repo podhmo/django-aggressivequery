@@ -62,3 +62,16 @@ class ExtractHintDictTests(TestCase):
             'order',
         ]
         self.assertEqual(tuple(sorted(candidates.keys())), tuple(sorted(expected)))
+
+    def test_for_prepare__load_candidates5(self):
+        candidates = self._callFUT(m.CustomerPosition)
+        expected = [
+            'id',
+            'name',
+            'memo1',
+            'memo2',
+            'memo3',
+            'substitute',
+            'customer',
+        ]
+        self.assertEqual(tuple(sorted(candidates.keys())), tuple(sorted(expected)))

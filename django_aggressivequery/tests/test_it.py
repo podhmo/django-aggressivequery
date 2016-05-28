@@ -3,7 +3,7 @@ from django.test import TestCase
 from . import models as m
 
 
-class OnlyQueryTests(TestCase):
+class FromQueryOneToOneTests(TestCase):
     def _callFUT(self, query, fields):
         from django_aggressivequery import from_query
         return from_query(query, fields)
@@ -154,6 +154,12 @@ class OnlyQueryTests(TestCase):
                     self.assertEqual(len(customers), 2)
                     self.assertIn("memo3", str(optimized.query))
 
+
+class FromQueryOneToManyTests(TestCase):
+    def _callFUT(self, query, fields):
+        from django_aggressivequery import from_query
+        return from_query(query, fields)
+
     def _makeOrderStructure(self, structure):
         for order_structure in structure:
             order = m.Order.objects.create(name=order_structure["name"])
@@ -266,17 +272,118 @@ class OnlyQueryTests(TestCase):
                     orders = [(o.id, o.name) for o in optimized]
                     self.assertEqual(len(orders), 2)
 
-    def test___many_to_one__same_type_multiple(self):
-        fields = ["xxxx", "name", "memo1", "customer__name", "substitute__name"]
-        qs = m.CustomerPosition.objects.all()
-        self.assertNotIn("JOIN", str(qs.query))
-        optimized = self._callFUT(qs, fields)
-        self.assertIn("JOIN", str(optimized.query))
-        # joined query is more long
-        # self.assertLess(len(str(optimized.query)), len(str(qs.query)))
-        self.assertNotIn("memo3", str(optimized.query))
 
-    # def test___many_to_one__with_join(self):
+class FromQueryManyToOneTests(TestCase):
+    def _callFUT(self, query, fields):
+        from django_aggressivequery import from_query
+        return from_query(query, fields)
+
+    def _makeCustomerStructure(self, structure):
+        for customer_structure in structure:
+            customer = m.Customer.objects.create(name=customer_structure["name"])
+            for position_structure in customer_structure.get("customerposition_set", []):
+                substitute = m.Customer.objects.create(name=position_structure["substitute"]["name"])
+                m.CustomerPosition.objects.create(name=position_structure["name"], customer=customer, substitute=substitute)
+
+    def test__many_to_one__same_type_multiple__join_by_filter(self):
+        structure = [
+            {"name": "foo", "customerposition_set": [
+                {"name": "1st", "substitute": {"name": "dummy1"}}, {"name": "2nd", "substitute": {"name": "dummy2"}}, {"name": "3rd", "substitute": {"name": "dummy3"}}
+            ]},
+            {"name": "bar", "customerposition_set": [
+                {"name": "1st", "substitute": {"name": "dummy4"}}, {"name": "2nd", "substitute": {"name": "dummy5"}}
+            ]}
+        ]
+        self._makeCustomerStructure(structure)
+        fields = ["xxxx", "name", "memo1", "customer__name", "substitute__name"]
+
+        for msg, before_count, after_count, has_join, qs_filter in [
+                ("with select related", 1, 1, True, lambda qs: qs.all().filter(customer__name="foo").select_related("customer")),
+                ("without select related", 1, 1, True, lambda qs: qs.all().filter(customer__name="foo")),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, has_join=has_join, qs_filter=qs_filter):
+                qs = qs_filter(m.CustomerPosition.objects)
+                optimized = self._callFUT(qs, fields)
+
+                self.assertEqual("JOIN" in str(qs.query), has_join)
+                with self.assertNumQueries(before_count):
+                    positions = [(p.id, p.name) for p in qs]
+                    self.assertEqual(len(positions), 3)
+                    self.assertIn("memo3", str(qs.query))
+
+                self.assertIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    positions = [(p.id, p.name) for p in optimized]
+                    self.assertEqual(len(positions), 3)
+                    self.assertNotIn("memo3", str(optimized.query))
+
+    def test__many_to_one__same_type_multiple__join_by_selections(self):
+        structure = [
+            {"name": "foo", "customerposition_set": [
+                {"name": "1st", "substitute": {"name": "dummy1"}}, {"name": "2nd", "substitute": {"name": "dummy2"}}, {"name": "3rd", "substitute": {"name": "dummy3"}}
+            ]},
+            {"name": "bar", "customerposition_set": [
+                {"name": "1st", "substitute": {"name": "dummy4"}}, {"name": "2nd", "substitute": {"name": "dummy5"}}
+            ]}
+        ]
+        self._makeCustomerStructure(structure)
+        fields = ["xxxx", "name", "memo1", "customer__name", "substitute__name"]
+
+        for msg, before_count, after_count, has_join, qs_filter in [
+                ("with select related", 1, 1, True, lambda qs: qs.all().select_related("customer")),
+                ("without select related", 1, 1, False, lambda qs: qs.all()),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, has_join=has_join, qs_filter=qs_filter):
+                qs = qs_filter(m.CustomerPosition.objects)
+                optimized = self._callFUT(qs, fields)
+
+                self.assertEqual("JOIN" in str(qs.query), has_join)
+                with self.assertNumQueries(before_count):
+                    positions = [(p.id, p.name) for p in qs]
+                    self.assertEqual(len(positions), 5)
+                    self.assertIn("memo3", str(qs.query))
+
+                self.assertIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    positions = [(p.id, p.name) for p in optimized]
+                    self.assertEqual(len(positions), 5)
+                    self.assertNotIn("memo3", str(optimized.query))
+
+    def test__many_to_one__only_one_type(self):
+        structure = [
+            {"name": "foo", "customerposition_set": [
+                {"name": "1st", "substitute": {"name": "dummy1"}}, {"name": "2nd", "substitute": {"name": "dummy2"}}, {"name": "3rd", "substitute": {"name": "dummy3"}}
+            ]},
+            {"name": "bar", "customerposition_set": [
+                {"name": "1st", "substitute": {"name": "dummy4"}}, {"name": "2nd", "substitute": {"name": "dummy5"}}
+            ]}
+        ]
+        self._makeCustomerStructure(structure)
+        fields = ["xxxx", "name", "memo1", "substitute__name"]
+
+        for msg, before_count, after_count, has_join, qs_filter in [
+                ("with select related", 1, 1, True, lambda qs: qs.all().select_related("substitute")),
+                ("without select related", 6, 1, False, lambda qs: qs.all()),
+                ("with another select related", 6, 1, True, lambda qs: qs.all().select_related("customer")),
+        ]:
+            with self.subTest(msg=msg, before_count=before_count, after_count=after_count, has_join=has_join, qs_filter=qs_filter):
+                qs = qs_filter(m.CustomerPosition.objects)
+                optimized = self._callFUT(qs, fields)
+
+                self.assertEqual("JOIN" in str(qs.query), has_join)
+                with self.assertNumQueries(before_count):
+                    positions = [(p.id, p.name, p.substitute.name) for p in qs]
+                    self.assertEqual(len(positions), 5)
+                    self.assertIn("memo3", str(qs.query))
+                    self.assertNotIn("customer.", str(qs.query))
+
+                self.assertIn("JOIN", str(optimized.query))
+                with self.assertNumQueries(after_count):
+                    positions = [(p.id, p.name, p.substitute.name) for p in optimized]
+                    self.assertEqual(len(positions), 5)
+                    self.assertNotIn("customer.", str(optimized.query))
+
+    # def test__many_to_one__with_join(self):
     #     fields = ["xxxx", "name", "memo1", "order__name", "order__memo2", "order__yyyy"]
     #     qs = m.Item.objects.all().select_related("order")
 
@@ -287,7 +394,7 @@ class OnlyQueryTests(TestCase):
     #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
     #     self.assertNotIn("memo3", str(optimized.query))
 
-    # def test___many_to_one__without_join(self):
+    # def test__many_to_one__without_join(self):
     #     fields = ["xxxx", "name", "memo1"]
     #     qs = m.Item.objects.all().select_related("order")
 
@@ -297,7 +404,7 @@ class OnlyQueryTests(TestCase):
     #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
     #     self.assertNotIn("memo3", str(optimized.query))
 
-    # def test___many_to_one__with_join__by_filter(self):
+    # def test__many_to_one__with_join__by_filter(self):
     #     fields = ["xxxx", "name", "memo1"]
     #     qs = m.Item.objects.all().filter(order__name="foo")
 
@@ -307,7 +414,7 @@ class OnlyQueryTests(TestCase):
     #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
     #     self.assertNotIn("memo3", str(optimized.query))
 
-    # def test___many_to_many__with_prefetch(self):
+    # def test__many_to_many__with_prefetch(self):
     #     fields = ["xxxx", "name", "memo1", "customers__name", "customers__memo2", "customers__yyyy"]
     #     qs = m.Order.objects.all().prefetch_related("customers")
 
@@ -319,7 +426,7 @@ class OnlyQueryTests(TestCase):
     #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
     #     self.assertNotIn("memo3", str(optimized.query))
 
-    # def test___many_to_many__without_prefetch(self):
+    # def test__many_to_many__without_prefetch(self):
     #     fields = ["xxxx", "name", "memo1"]
     #     qs = m.Order.objects.all().prefetch_related("customers")
 
@@ -331,7 +438,7 @@ class OnlyQueryTests(TestCase):
     #     self.assertLess(len(str(optimized.query)), len(str(qs.query)))
     #     self.assertNotIn("memo3", str(optimized.query))
 
-    # def test___many_to_many__with_join__by_filter(self):
+    # def test__many_to_many__with_join__by_filter(self):
     #     fields = ["xxxx", "name", "memo1", "customers__memo2"]
     #     qs = m.Order.objects.all().prefetch_related("customers").filter(customers__name="foo")
 
