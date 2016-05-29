@@ -328,7 +328,6 @@ class QueryOptimizer(object):
         for lazy_join in lazy_join_list:
             join_targets.append(lazy_join())
             lazy_prefetch_list.extend(self.collect_lazy_prefetch_list_recusrive(lazy_join.result, name=lazy_join.name))
-            qs = self._optimize_prefetch(qs, lazy_join.result, name=lazy_join.name)
         return reset_select_related(qs, join_targets), lazy_prefetch_list
 
     def _optimize_prefetch(self, qs, result, name=None, lazy_prefetch_list=None):
