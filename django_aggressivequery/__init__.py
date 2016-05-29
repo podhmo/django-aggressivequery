@@ -441,6 +441,9 @@ class AggressiveQuery(object):
 
 # todo: cache
 def from_query(qs, name_list, more_specific=False, extractor=default_hint_extractor):
+    if not isinstance(name_list, (tuple, list)):
+        raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
+
     specific_list = name_list if more_specific else more_specific_selection(name_list)
     result = extractor.extract(qs.model, specific_list)
     inspector = Inspector(extractor.hintmap)
