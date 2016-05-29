@@ -1,6 +1,8 @@
 django-aggressivequery
 ========================================
 
+(this is experimental package)
+
 handling select_related and prefetch_reated, semi-automatically.
 
 
@@ -72,7 +74,8 @@ model
       price = models.IntegerField(null=False, default=0)
       ctime = models.DateTimeField()
 
-## more specific option
+more specific option
+----------------------------------------
 
 Calling `from_query()` with `more_specific` option, then use `Query.only()`.
 
