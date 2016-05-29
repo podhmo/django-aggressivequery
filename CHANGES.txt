@@ -1,1 +1,2 @@
-
+- 0.1.1: remove need less join (on prefetch releated)
+- 0.1: first release
