@@ -280,16 +280,20 @@ default_hint_extractor = HintExtractor()
 # utilities
 def reset_select_related(qs, join_targets):
     # remove all and set new settings
-    new_qs = qs.select_related(None).select_related(*join_targets)
+    new_qs = qs.select_related(None)
+    if join_targets:
+        new_qs = new_qs.select_related(*join_targets)
     logger.debug("@select_related: %r - %r", qs.model.__name__, join_targets)
     return new_qs
 
 
 def reset_prefetch_related(qs, prefetch_targets):
     # remove all and set new settings
-    new_qs = qs.prefetch_related(None).prefetch_related(*prefetch_targets)
-    # logger.debug("@prefetch: %r", prefetch_targets)
-    logger.debug("@prefetch: %r - %r", qs.model.__name__, [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
+    new_qs = qs.prefetch_related(None)
+    if prefetch_targets:
+        new_qs = new_qs.prefetch_related(*prefetch_targets)
+    logger.debug("@prefetch: %r", prefetch_targets)
+    # logger.debug("@prefetch: %r - %r", qs.model.__name__, [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
     return new_qs
 
 
