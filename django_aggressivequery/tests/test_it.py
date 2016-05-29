@@ -50,7 +50,7 @@ karma: 10, customer: bar
 
     def test_it__nested__more_specific(self):
         qs = m.CustomerKarma.objects.filter(point__gt=0)
-        optimized = self._callFUT(qs, ["*", "customer__orders__items__*", "customer__orders__name"], more_specific=True)
+        optimized = self._callFUT(qs, ["point", "customer__name", "customer__orders__items__name", "customer__orders__name"], more_specific=True)
 
         with self.assertNumQueries(3):
             buf = []

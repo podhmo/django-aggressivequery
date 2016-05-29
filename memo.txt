@@ -1,0 +1,2 @@
+* `python setup.py test -s django_aggressivequery.tests -l debug -s django_aggressivequery.tests.test_it.Tests.test_it__nested__more_specific` call twice?
+* `python setup.py test -s django_aggressivequery.tests -l debug -s django_aggressivequery.tests.test_it.Tests.test_it__nested__more_specific` Query.only() is ignored partially?

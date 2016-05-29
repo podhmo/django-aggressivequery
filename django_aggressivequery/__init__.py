@@ -281,7 +281,7 @@ default_hint_extractor = HintExtractor()
 def reset_select_related(qs, join_targets):
     # remove all and set new settings
     new_qs = qs.select_related(None).select_related(*join_targets)
-    logger.debug("@select_related: %r", join_targets)
+    logger.debug("@select_related: %r - %r", qs.model.__name__, join_targets)
     return new_qs
 
 
@@ -289,7 +289,7 @@ def reset_prefetch_related(qs, prefetch_targets):
     # remove all and set new settings
     new_qs = qs.prefetch_related(None).prefetch_related(*prefetch_targets)
     # logger.debug("@prefetch: %r", prefetch_targets)
-    logger.debug("@prefetch: %r - %r", qs.model, [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
+    logger.debug("@prefetch: %r - %r", qs.model.__name__, [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
     return new_qs
 
 
@@ -317,7 +317,7 @@ class QueryOptimizer(object):
         if not self.enable_selections:
             return qs
         fields = list(itertools.chain(self.inspector.collect_selections(result), externals or []))
-        logger.debug("@selection, %r", fields)
+        logger.debug("@selection, %r, %r", qs.model.__name__, fields)
         return qs.only(*fields)
 
     def _optimize_join(self, qs, result, name=None):
