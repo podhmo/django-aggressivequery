@@ -231,18 +231,27 @@ class Inspector(object):
     # todo: performance
     def collect_joins(self, result):
         # can join: one to one*, one* to one, many to one
-        xs = [h for h in result.related if isinstance(h.field.field, (related.OneToOneField))]
-        ys = [h for h in result.reverse_related if isinstance(h.field.rel, (reverse_related.OneToOneRel, reverse_related.ManyToOneRel))]
-        return itertools.chain(xs, ys)
+        matched = {}
+        for h in result.related:
+            if isinstance(h.field.field, (related.OneToOneField)):
+                matched[h.name] = h
+        for h in result.reverse_related:
+            if isinstance(h.field.rel, (reverse_related.OneToOneRel, reverse_related.ManyToOneRel)):
+                matched[h.name] = h
+        for sr in result.subresults:
+            if sr.name in matched:
+                yield Pair(hint=matched[sr.name], result=sr)
 
     def collect_prefetch_list(self, result):
         matched = {}
         for h in result.related:
             if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey)):
-                matched[h.name] = h
+                if not isinstance(h.field.field, related.OneToOneField):
+                    matched[h.name] = h
         for h in result.reverse_related:
             if isinstance(h.field.rel, (reverse_related.ManyToOneRel, reverse_related.ManyToManyRel)):
-                matched[h.name] = h
+                if not isinstance(h.field.rel, reverse_related.OneToOneRel):
+                    matched[h.name] = h
         for sr in result.subresults:
             if sr.name in matched:
                 yield Pair(hint=matched[sr.name], result=sr)
@@ -280,7 +289,7 @@ def reset_prefetch_related(qs, prefetch_targets):
     # remove all and set new settings
     new_qs = qs.prefetch_related(None).prefetch_related(*prefetch_targets)
     # logger.debug("@prefetch: %r", prefetch_targets)
-    logger.debug("@prefetch: %r", [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
+    logger.debug("@prefetch: %r - %r", qs.model, [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
     return new_qs
 
 
@@ -299,43 +308,71 @@ class QueryOptimizer(object):
 
     def optimize(self, qs, result=None):
         result = result or self.result
-        qs = self._optimize_join(qs.all(), result)
-        qs = self._optimize_prefetch(qs, result)
+        qs, lazy_prefetch_list = self._optimize_join(qs.all(), result)
+        qs = self._optimize_prefetch(qs, result, lazy_prefetch_list=lazy_prefetch_list)
         qs = self._optimize_selections(qs, result)
         return qs
 
-    def _optimize_selections(self, qs, result, *externals):
+    def _optimize_selections(self, qs, result, name=None, externals=None):
         if not self.enable_selections:
             return qs
-        fields = list(itertools.chain(self.inspector.collect_selections(result), externals))
+        fields = list(itertools.chain(self.inspector.collect_selections(result), externals or []))
         logger.debug("@selection, %r", fields)
         return qs.only(*fields)
 
-    def _optimize_join(self, qs, result):
+    def _optimize_join(self, qs, result, name=None):
         # todo: nested
-        join_targets = [h.name for h in self.inspector.collect_joins(result)]
-        return reset_select_related(qs, join_targets)
+        lazy_join_list = list(self.collect_lazy_join_list_recursive(result, name=name))
+        lazy_prefetch_list = []
+        join_targets = []
+        for lazy_join in lazy_join_list:
+            join_targets.append(lazy_join())
+            lazy_prefetch_list.extend(self.collect_lazy_prefetch_list_recusrive(lazy_join.result, name=lazy_join.name))
+            qs = self._optimize_prefetch(qs, lazy_join.result, name=lazy_join.name)
+        return reset_select_related(qs, join_targets), lazy_prefetch_list
 
-    def _optimize_prefetch(self, qs, result):
+    def _optimize_prefetch(self, qs, result, name=None, lazy_prefetch_list=None):
         # todo: nested, settings filter lazy
-        lazy_prefetch_list = self.collect_lazy_prefetch_list_recusrive(result)
+        lazy_prefetch_list = lazy_prefetch_list or []
+        lazy_prefetch_list.extend(self.collect_lazy_prefetch_list_recusrive(result, name=name))
         prefetch_targets = []
         for lazy_prefetch in lazy_prefetch_list:
             filters = self.prefetch_filters[lazy_prefetch.name]
-            prefetch_targets.append(lazy_prefetch(filters, self._optimize_selections))
+            prefetch_qs = lazy_prefetch.hint.rel_model.objects.all()  # default
+            prefetch_qs = functools.reduce(lambda qs, f: f(qs), filters, prefetch_qs)
+            prefetch_qs, sub_lazy_prefch = self._optimize_join(prefetch_qs, lazy_prefetch.result, name=lazy_prefetch.name)
+            if lazy_prefetch.hint.rel_fk:
+                prefetch_qs = self._optimize_selections(prefetch_qs, lazy_prefetch.result, externals=[lazy_prefetch.hint.rel_fk])
+            else:
+                prefetch_qs = self._optimize_selections(prefetch_qs, lazy_prefetch.result)
+            prefetch_targets.append(lazy_prefetch(prefetch_qs))
         return reset_prefetch_related(qs, prefetch_targets)
 
-    def collect_lazy_prefetch_list_recusrive(self, result):
-        pairs = self.inspector.collect_prefetch_list(result)
-        lazy_prefetch_list = []
+    def collect_lazy_join_list_recursive(self, result, name=None):
+        pairs = self.inspector.collect_joins(result)
         for h, sr in pairs:
-            lazy_prefetch_list.append(LazyPrefetch(h.name, h, sr))  # support to_attr?
+            lazy_join = LazyJoin(h.name, h, sr)
+            if name is not None:
+                lazy_join = lazy_join.prefixed(name)
+            yield lazy_join
+            for sub_join in self.collect_lazy_join_list_recursive(sr):
+                yield sub_join.prefixed(lazy_join.name)
+
+    def collect_lazy_prefetch_list_recusrive(self, result, name=None):
+        pairs = self.inspector.collect_prefetch_list(result)
+        for h, sr in pairs:
+            lazy_prefetch = LazyPrefetch(h.name, h, sr)
+            if name is not None:
+                lazy_prefetch = lazy_prefetch.prefixed(name)
+            yield lazy_prefetch
             for sub_prefetch in self.collect_lazy_prefetch_list_recusrive(sr):
-                lazy_prefetch_list.append(sub_prefetch.prefixed(h.name))
-        return lazy_prefetch_list
+                yield sub_prefetch.prefixed(lazy_prefetch.name)
+
+    def pp(self, result=None, out=sys.stdout):
+        return self.inspector.pp(result or self.result, out=out)
 
 
-class LazyPrefetch(object):
+class LazyPair(object):
     def __init__(self, name, hint, result):
         self.name = name
         self.hint = hint
@@ -347,20 +384,15 @@ class LazyPrefetch(object):
             self.hint, self.result
         )
 
-    def __call__(self, filters, optimize_selection, to_attr=None):
-        prefetch_qs = self.queryset(filters)
-        prefetch_qs = self.selection(prefetch_qs, optimize_selection)
+
+class LazyJoin(LazyPair):
+    def __call__(self):
+        return self.name
+
+
+class LazyPrefetch(LazyPair):
+    def __call__(self, prefetch_qs, to_attr=None):
         return Prefetch(self.name, queryset=prefetch_qs, to_attr=to_attr)
-
-    def queryset(self, filters):
-        qs = self.hint.rel_model.objects.all()  # default
-        return functools.reduce(lambda qs, f: f(qs), filters, qs)
-
-    def selection(self, qs, fn):
-        if self.hint.rel_fk:
-            return fn(qs, self.result, self.hint.rel_fk)
-        else:
-            return fn(qs, self.result)
 
 
 class AggressiveQuery(object):
@@ -401,7 +433,7 @@ class AggressiveQuery(object):
         return self.aggressive_queryset[k]
 
     def pp(self, out=sys.stdout):
-        return self.inspector.pp(self.result)
+        return self.optimizer.pp(out=out)
 
 
 # todo: cache

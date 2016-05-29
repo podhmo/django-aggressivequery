@@ -14,6 +14,9 @@ class Tests(TestCase):
         bar = m.Customer.objects.create(name="bar")
         m.CustomerKarma.objects.create(point=10, customer=bar)
 
+        m.CustomerPosition.objects.create(name="1st", customer=foo, substitute=bar)
+        m.CustomerPosition.objects.create(name="2nd", customer=bar, substitute=foo)
+
         order1 = m.Order.objects.create(name="order-1")
         m.Item.objects.create(name="order-1-item-a", order=order1)
         m.Item.objects.create(name="order-1-item-b", order=order1)
@@ -85,5 +88,22 @@ karma: 10, customer: bar
 karma: 10, customer: bar
 - order: order-1, items: order-1-item-a
 - order: order-2, items: order-2-item-a"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
+
+    # join
+    def test_it__nested_join(self):
+        qs = m.CustomerPosition.objects
+        optimized = self._callFUT(qs, ["customer__karma"])
+        with self.assertNumQueries(1):
+            buf = []
+            for position in optimized:
+                buf.append("position: {}, customer: {}, karma: {}".format(
+                    position.name, position.customer.name, position.customer.karma.point
+                ))
+
+            expected = """\
+position: 1st, customer: foo, karma: 0
+position: 2nd, customer: bar, karma: 10"""
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)
