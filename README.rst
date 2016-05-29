@@ -20,7 +20,7 @@ handling select_related and prefetch_reated, semi-automatically.
       UserInfo.objects.filter(point__gt=0)
       .select_related("user")
       .prefetch_related(
-          "user__teams__games",
+          "user__teams",
           Prefetch("user__teams__games", queryset=Game.objects.filter(name__contains="-a"))
       )
   )
