@@ -4,7 +4,7 @@ from collections import namedtuple
 
 Hint = namedtuple(
     "Hint",
-    "name, is_relation, is_reverse_related, rel_name, rel_fk, rel_model, defer_name, field"
+    "name, is_relation, is_reverse_related, rel_name, rel_fk, rel_model, field"
 )
 TmpResult = namedtuple(
     "TmpResult",
@@ -12,7 +12,7 @@ TmpResult = namedtuple(
 )
 Result = namedtuple(
     "Result",
-    "name, fields, related, reverse_related, foreign_keys, subresults"
+    "name, fields, related, reverse_related, subresults"
 )
 Pair = namedtuple(
     "Pair",

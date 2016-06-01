@@ -64,7 +64,7 @@ class HintMap(object):
     def extract(self, model):
         d = OrderedDict()
         for f in get_all_fields(model):
-            name, is_relation, defer_name = f.name, f.is_relation, getattr(f, "attname", None)
+            name, is_relation = f.name, f.is_relation
             rel_name = None
             is_reverse_related = False
             rel_model = None
@@ -85,7 +85,6 @@ class HintMap(object):
                              rel_name=rel_name,
                              rel_model=rel_model,
                              rel_fk=rel_fk,
-                             defer_name=defer_name,  # hmm
                              field=f)
             # hmm. supporting accessor_name? (e.g. `customerposition_set`)
             if hasattr(f, "get_accessor_name"):
@@ -125,15 +124,11 @@ class HintExtractor(object):
                         fields=[],
                         related=[],
                         reverse_related=[],
-                        foreign_keys=[],
                         subresults=[])
         for h in self.seq(tmp_result.hints, key=lambda h: h.name):
             if not h.is_relation:
                 result.fields.append(h)
                 continue
-
-            if h.defer_name is not None and not h.field.many_to_many:
-                result.foreign_keys.append(h.defer_name)
 
             if h.is_reverse_related:
                 result.reverse_related.append(h)
@@ -257,7 +252,7 @@ class Inspector(object):
                 yield Pair(hint=matched[sr.name], result=sr)
 
     def collect_selections(self, result):
-        xs = itertools.chain([f.name for f in result.fields], result.foreign_keys)
+        xs = [f.name for f in result.fields]
         ys = []
         related_mapping = {h.name: h.rel_model for h in result.related}
         for sr in result.subresults:
