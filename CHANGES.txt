@@ -1,3 +1,4 @@
+- 0.2.0: skipping function support (`AggressiveQuery.skip_filter()`)
 - 0.1.2: gentle type check, in `from_query()`
 - 0.1.1: remove need less join (on prefetch releated)
 - 0.1: first release
