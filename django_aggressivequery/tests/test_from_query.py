@@ -5,8 +5,8 @@ from . import models as m
 
 class FromQueryOneToOneTests(TestCase):
     def _callFUT(self, query, fields):
-        from django_aggressivequery import from_query
-        return from_query(query, fields, more_specific=True)
+        from django_aggressivequery import from_queryset
+        return from_queryset(query, fields, more_specific=True)
 
     def _makeCustomerStructure(self, structure):
         for customer_structure in structure:
@@ -157,8 +157,8 @@ class FromQueryOneToOneTests(TestCase):
 
 class FromQueryOneToManyTests(TestCase):
     def _callFUT(self, query, fields):
-        from django_aggressivequery import from_query
-        return from_query(query, fields, more_specific=True)
+        from django_aggressivequery import from_queryset
+        return from_queryset(query, fields, more_specific=True)
 
     def _makeOrderStructure(self, structure):
         for order_structure in structure:
@@ -275,8 +275,8 @@ class FromQueryOneToManyTests(TestCase):
 
 class FromQueryManyToOneTests(TestCase):
     def _callFUT(self, query, fields):
-        from django_aggressivequery import from_query
-        return from_query(query, fields, more_specific=True)
+        from django_aggressivequery import from_queryset
+        return from_queryset(query, fields, more_specific=True)
 
     def _makeCustomerStructure(self, structure):
         for customer_structure in structure:
@@ -386,8 +386,8 @@ class FromQueryManyToOneTests(TestCase):
 
 class FromQueryManyToManyTests(TestCase):
     def _callFUT(self, query, fields):
-        from django_aggressivequery import from_query
-        return from_query(query, fields, more_specific=True)
+        from django_aggressivequery import from_queryset
+        return from_queryset(query, fields, more_specific=True)
 
     def _makeOrderCustomersStructure(self, structure):
         orders = [m.Order.objects.create(name=s["name"]) for s in structure["orders"]]
@@ -511,7 +511,7 @@ class FromQueryManyToManyTests(TestCase):
 
                 self.assertNotIn("JOIN", str(optimized.query))
                 with self.assertNumQueries(after_count):
-                    optimized = optimized.to_query().filter(customers__name="z")
+                    optimized = optimized.to_queryset().filter(customers__name="z")
                     customers = [(o.id, o.name, c.id, c.name) for o in optimized for c in o.customers.all()]
                     self.assertEqual(len(customers), 3)
                     self.assertIn("memo3", str(qs.query))
@@ -560,5 +560,5 @@ class FromQueryManyToManyTests(TestCase):
                 # using only, in prefetched.
                 for p in qs._prefetch_related_lookups:
                     self.assertIn("memo3", str(p.queryset.query), msg="qs has memo3")
-                for p in optimized.to_query()._prefetch_related_lookups:
+                for p in optimized.to_queryset()._prefetch_related_lookups:
                     self.assertNotIn("memo3", str(p.queryset.query), msg="optimized qs doesn't have memo3")

@@ -5,8 +5,8 @@ from . import models as m
 
 class Tests(TestCase):
     def _callFUT(self, query, fields, more_specific=False):
-        from django_aggressivequery import from_query
-        return from_query(query, fields, more_specific=more_specific)
+        from django_aggressivequery import from_queryset
+        return from_queryset(query, fields, more_specific=more_specific)
 
     def setUp(self):
         foo = m.Customer.objects.create(name="foo")

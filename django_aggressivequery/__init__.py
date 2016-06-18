@@ -12,6 +12,7 @@ from django.db.models.fields import related
 from django.db.models.fields import reverse_related
 from django.db.models import Prefetch
 from .structures import Hint, TmpResult, Result, Pair
+from .structures import excluded_result, dict_from_keys
 
 
 logger = logging.getLogger(__name__)
@@ -370,6 +371,25 @@ class QueryOptimizer(object):
         return self.inspector.pp(result or self.result, out=out)
 
 
+class FilteredQueryOptimizer(object):
+    def __init__(self, optimizer, skips):
+        self._optimizer = optimizer
+        self.skips = skips
+
+    def __getattr__(self, k):
+        return getattr(self._optimizer, k)
+
+    def __copy__(self):
+        return self.__class__(copy.copy(self._optimizer), self.skips)
+
+    def optimize(self, qs, result=None):
+        return self._optimizer.optimize(qs, result or self.result)
+
+    @cached_property
+    def result(self):
+        return excluded_result(self._optimizer.result, dict_from_keys(self.skips))
+
+
 class LazyPair(object):
     def __init__(self, name, hint, result):
         self.name = name
@@ -413,11 +433,16 @@ class AggressiveQuery(object):
             new_qs.optimizer.prefetch_filters[name].append(filter_fn)
         return new_qs
 
+    def skip_filter(self, skips):
+        new_query = copy.copy(self)
+        new_query.optimizer = FilteredQueryOptimizer(new_query.optimizer, skips)
+        return new_query
+
     @cached_property
     def aggressive_queryset(self):
         return self.optimizer.optimize(self.source_queryset)
 
-    def to_query(self):
+    def to_queryset(self):
         return self.aggressive_queryset
 
     @property
@@ -435,7 +460,7 @@ class AggressiveQuery(object):
 
 
 # todo: cache
-def from_query(qs, name_list, more_specific=False, extractor=default_hint_extractor):
+def from_queryset(qs, name_list, more_specific=False, skip_list=None, extractor=default_hint_extractor):
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
 

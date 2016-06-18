@@ -8,9 +8,9 @@ handling select_related and prefetch_reated, semi-automatically.
 
 .. code-block:: python
 
-  from django_aggressivequery import from_query
+  from django_aggressivequery import from_queryset
   (
-      from_query(UserInfo.objects.filter(point__gt=0), ["user__teams__games"])
+      from_queryset(UserInfo.objects.filter(point__gt=0), ["user__teams__games"])
       .prefetch_filter(
           user__teams__games=lambda qs: qs.filter(name__contains="-a")
       )
@@ -77,13 +77,13 @@ model
 more specific option
 ----------------------------------------
 
-Calling `from_query()` with `more_specific` option, then use `Query.only()`.
+Calling `from_queryset()` with `more_specific` option, then use `Query.only()`.
 
 .. code-block:: python
 
-  from django_aggressivequery import from_query
+  from django_aggressivequery import from_queryset
   (
-      from_query(UserInfo.objects.filter(point__gt=0), ["point", "user__name", "user__teams__name", "user__teams__games__name"], more_specific=True)
+      from_queryset(UserInfo.objects.filter(point__gt=0), ["point", "user__name", "user__teams__name", "user__teams__games__name"], more_specific=True)
       .prefetch_filter(
           user__teams__games=lambda qs: qs.filter(name__contains="-a")
       )
