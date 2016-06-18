@@ -460,7 +460,7 @@ class AggressiveQuery(object):
 
 
 # todo: cache
-def from_queryset(qs, name_list, more_specific=False, skip_list=None, extractor=default_hint_extractor):
+def from_queryset(qs, name_list, more_specific=False, extractor=default_hint_extractor):
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
 
