@@ -86,7 +86,7 @@ class HintMap(object):
             d = self.cache[model] = self.extract(model)
         return d
 
-    def iterator(self, model, tokens):
+    def iterator(self, model, tokens, history=None):
         return self.iterator_cls(self.load(model), tokens)
 
 
@@ -102,7 +102,8 @@ class HintExtractor(object):
     def extract(self, model, name_list):
         backref = set()
         backref.add((model, ""))
-        tmp_result = self.drilldown(model, name_list, backref=backref, parent_name="")
+        history = [""]
+        tmp_result = self.drilldown(model, name_list, backref=backref, history=history)
         return self.classify(tmp_result)
 
     def seq(self, seq, key):
@@ -128,7 +129,8 @@ class HintExtractor(object):
             result.subresults.append(self.classify(sr))
         return result
 
-    def drilldown(self, model, name_list, backref, parent_name, indent=0):
+    def drilldown(self, model, name_list, backref, history, indent=0):
+        parent_name = history[-1]
         logger.info("%s name=%r model=%r %r", " " * (indent + indent), parent_name, model.__name__, name_list)
         hints = []
         names = []
@@ -142,7 +144,7 @@ class HintExtractor(object):
                 prefix, sub_name = name.split("__", 1)
                 rels[prefix].append(sub_name)
 
-        iterator = self.hintmap.iterator(model, names)
+        iterator = self.hintmap.iterator(model, names, history=history)
         for hint, _ in iterator:
             hints.append(hint)
 
@@ -162,13 +164,15 @@ class HintExtractor(object):
                         continue
                 backref.add(k)
                 hints.append(hint)
+                history.append(hint.name)
                 self._merge(
                     subresults_dict,
                     self.drilldown(
                         hint.rel_model, sub_name_list,
-                        backref=backref, parent_name=hint.name, indent=indent + 1
+                        backref=backref, history=history, indent=indent + 1
                     )
                 )
+                history.pop()
                 if k in backref:
                     backref.remove(k)
         return TmpResult(name=parent_name, hints=hints, subresults=list(subresults_dict.values()))
