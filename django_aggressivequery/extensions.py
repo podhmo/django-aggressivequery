@@ -2,7 +2,7 @@
 import copy
 import functools
 from collections import defaultdict
-from django.utils.functional import cached_property
+from .functional import cached_property
 from .structures import excluded_result, dict_from_keys
 
 # extension type

@@ -5,10 +5,10 @@ import sys
 import json
 import logging
 from functools import partial
-from django.utils.functional import cached_property
 from django.db.models.fields import related
 from django.db.models.fields import reverse_related
 from django.db.models import Prefetch
+from .functional import cached_property
 from .structures import Pair
 from . import extensions as ex
 from . import extraction
@@ -92,15 +92,22 @@ def reset_prefetch_related(qs, prefetch_targets):
 
 
 class QueryOptimizer(object):
-    def __init__(self, result, inspector, enable_selections=True, extensions=None):
-        self.result = result
-        self.inspector = inspector
+    def __init__(self, transaction, enable_selections=True, extensions=None):
+        self.transaction = transaction
         self.enable_selections = enable_selections
         self.extensions = extensions or ex.ExtensionRepository()
 
+    @property
+    def result(self):
+        return self.transaction.result
+
+    @property
+    def inspector(self):
+        return self.transaction.inspector
+
     def __copy__(self):
         return self.__class__(
-            self.result, self.inspector,
+            copy.copy(self.transaction),
             enable_selections=self.enable_selections,
             extensions=copy.copy(self.extensions)
         )
@@ -235,7 +242,23 @@ class AggressiveQuery(object):
         return self.optimizer.pp(out=out)
 
 
+class ExtractorTransaction(object):
+    def __init__(self, qs, name_list, extractor=None, sorted=True):
+        self.qs = qs
+        self.name_list = name_list
+        self.extractor = extractor or extraction.HintExtractor()
+
+    @cached_property
+    def result(self):
+        return self.extractor.extract(self.qs.model, self.name_list)
+
+    @cached_property
+    def inspector(self):
+        return Inspector(self.extractor.hintmap)
+
+
 default_hint_extractor = extraction.HintExtractor()
+
 default_extension_repository = (
     ex.ExtensionRepository()
     .register(ex.PrefetchFilterExtension())
@@ -245,15 +268,13 @@ default_extension_repository = (
 
 # todo: cache
 def from_queryset(qs, name_list, more_specific=False,
-                  extractor=default_hint_extractor,
                   extensions=default_extension_repository):
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
 
     specific_list = name_list if more_specific else more_specific_selection(name_list)
-    result = extractor.extract(qs.model, specific_list)
-    inspector = Inspector(extractor.hintmap)
-    optimizer = QueryOptimizer(result, inspector, enable_selections=more_specific, extensions=extensions)
+    ex_transaction = ExtractorTransaction(qs, specific_list)
+    optimizer = QueryOptimizer(ex_transaction, enable_selections=more_specific, extensions=extensions)
     return AggressiveQuery(qs, optimizer)
 
 
