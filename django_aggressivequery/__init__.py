@@ -1,11 +1,11 @@
 # -*- coding:utf-8 -*-
 import copy
-import functools
 import itertools
 import sys
 import json
 import logging
 import django
+from functools import partial
 from collections import defaultdict, OrderedDict
 from django.utils.functional import cached_property
 from django.db.models.fields import related
@@ -13,7 +13,7 @@ from django.db.models.fields import reverse_related
 from django.db.models import Prefetch
 from .structures import Hint, TmpResult, Result, Pair
 from .structures import excluded_result, dict_from_keys
-
+from .extensions import ExtensionRepository, default_extension_repository
 
 logger = logging.getLogger(__name__)
 
@@ -294,16 +294,17 @@ def reset_prefetch_related(qs, prefetch_targets):
 
 
 class QueryOptimizer(object):
-    def __init__(self, result, inspector, enable_selections=True, prefetch_filters=None):
+    def __init__(self, result, inspector, enable_selections=True, extensions=None):
         self.result = result
         self.inspector = inspector
         self.enable_selections = enable_selections
-        self.prefetch_filters = prefetch_filters or defaultdict(list)
+        self.extensions = extensions or ExtensionRepository()
 
     def __copy__(self):
         return self.__class__(
             self.result, self.inspector,
-            prefetch_filters=copy.deepcopy(self.prefetch_filters)
+            enable_selections=self.enable_selections,
+            extensions=copy.copy(self.extensions)
         )
 
     def optimize(self, qs, result=None):
@@ -335,10 +336,12 @@ class QueryOptimizer(object):
         lazy_prefetch_list = lazy_prefetch_list or []
         lazy_prefetch_list.extend(self.collect_lazy_prefetch_list_recusrive(result, name=name))
         prefetch_targets = []
+        extension_list = self.extensions.with_type(":prefetch")
         for lazy_prefetch in lazy_prefetch_list:
-            filters = self.prefetch_filters[lazy_prefetch.name]
             prefetch_qs = lazy_prefetch.hint.rel_model.objects.all()  # default
-            prefetch_qs = functools.reduce(lambda qs, f: f(qs), filters, prefetch_qs)
+            for extension in extension_list:
+                prefetch_qs = extension.apply(prefetch_qs, lazy_prefetch.name)
+
             prefetch_qs, sub_lazy_prefch = self._optimize_join(prefetch_qs, lazy_prefetch.result, name=lazy_prefetch.name)
             if lazy_prefetch.hint.rel_fk:
                 prefetch_qs = self._optimize_selections(prefetch_qs, lazy_prefetch.result, externals=[lazy_prefetch.hint.rel_fk])
@@ -427,14 +430,13 @@ class AggressiveQuery(object):
     def _clone(self):
         return copy.copy(self)
 
-    def prefetch_filter(self, **conditions):
-        new_qs = self._clone()
-        for name, filter_fn in conditions.items():
-            new_qs.optimizer.prefetch_filters[name].append(filter_fn)
-        return new_qs
+    # todo: using extension. prefetch_filter, skip_filter
+    def __getattr__(self, k):
+        extension = self.optimizer.extensions.with_name(k)
+        return partial(extension.setup, self)
 
     def skip_filter(self, skips):
-        new_query = copy.copy(self)
+        new_query = self._clone()
         new_query.optimizer = FilteredQueryOptimizer(new_query.optimizer, skips)
         return new_query
 
@@ -460,14 +462,16 @@ class AggressiveQuery(object):
 
 
 # todo: cache
-def from_queryset(qs, name_list, more_specific=False, extractor=default_hint_extractor):
+def from_queryset(qs, name_list, more_specific=False,
+                  extractor=default_hint_extractor,
+                  extensions=default_extension_repository):
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
 
     specific_list = name_list if more_specific else more_specific_selection(name_list)
     result = extractor.extract(qs.model, specific_list)
     inspector = Inspector(extractor.hintmap)
-    optimizer = QueryOptimizer(result, inspector, enable_selections=more_specific)
+    optimizer = QueryOptimizer(result, inspector, enable_selections=more_specific, extensions=extensions)
     return AggressiveQuery(qs, optimizer)
 
 
