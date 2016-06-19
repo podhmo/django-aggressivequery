@@ -2,9 +2,11 @@
 import copy
 import functools
 from collections import defaultdict
+from django.utils.functional import cached_property
+from .structures import excluded_result, dict_from_keys
 
 # extension type
-extension_types = [":prefetch", ":selecting", ":join"]
+extension_types = [":prefetch", ":selecting", ":join", ":wrap"]
 
 
 class ExtensionRepository(object):
@@ -53,6 +55,39 @@ class OnSelectingExtension(Extension):
     type = ":select"
 
 
+class WrappingExtension(Extension):
+    type = ":wrap"
+
+
+class SkipFieldsExtension(WrappingExtension):
+    """skipping needless fields"""
+    name = "skip_filter"
+
+    def setup(self, aqs, skips):
+        new_query = aqs._clone()
+        new_query.optimizer = _FilteredQueryOptimizer(new_query.optimizer, skips)
+        return new_query
+
+
+class _FilteredQueryOptimizer(object):
+    def __init__(self, optimizer, skips):
+        self._optimizer = optimizer
+        self.skips = skips
+
+    def __getattr__(self, k):
+        return getattr(self._optimizer, k)
+
+    def __copy__(self):
+        return self.__class__(copy.copy(self._optimizer), self.skips)
+
+    def optimize(self, qs, result=None):
+        return self._optimizer.optimize(qs, result or self.result)
+
+    @cached_property
+    def result(self):
+        return excluded_result(self._optimizer.result, dict_from_keys(self.skips))
+
+
 class PrefetchFilterExtension(OnPrefetchExtension):
     """adding filter on prefetched query"""
     name = "prefetch_filter"
@@ -89,4 +124,5 @@ class CustomPrefetchExtension(OnPrefetchExtension):
 default_extension_repository = (
     ExtensionRepository()
     .register(PrefetchFilterExtension())
+    .register(SkipFieldsExtension())
 )

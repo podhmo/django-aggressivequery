@@ -12,7 +12,6 @@ from django.db.models.fields import related
 from django.db.models.fields import reverse_related
 from django.db.models import Prefetch
 from .structures import Hint, TmpResult, Result, Pair
-from .structures import excluded_result, dict_from_keys
 from .extensions import ExtensionRepository, default_extension_repository
 
 logger = logging.getLogger(__name__)
@@ -374,25 +373,6 @@ class QueryOptimizer(object):
         return self.inspector.pp(result or self.result, out=out)
 
 
-class FilteredQueryOptimizer(object):
-    def __init__(self, optimizer, skips):
-        self._optimizer = optimizer
-        self.skips = skips
-
-    def __getattr__(self, k):
-        return getattr(self._optimizer, k)
-
-    def __copy__(self):
-        return self.__class__(copy.copy(self._optimizer), self.skips)
-
-    def optimize(self, qs, result=None):
-        return self._optimizer.optimize(qs, result or self.result)
-
-    @cached_property
-    def result(self):
-        return excluded_result(self._optimizer.result, dict_from_keys(self.skips))
-
-
 class LazyPair(object):
     def __init__(self, name, hint, result):
         self.name = name
@@ -430,15 +410,10 @@ class AggressiveQuery(object):
     def _clone(self):
         return copy.copy(self)
 
-    # todo: using extension. prefetch_filter, skip_filter
+    # implementing methods prefetch_filter, skip_filter as extension
     def __getattr__(self, k):
         extension = self.optimizer.extensions.with_name(k)
         return partial(extension.setup, self)
-
-    def skip_filter(self, skips):
-        new_query = self._clone()
-        new_query.optimizer = FilteredQueryOptimizer(new_query.optimizer, skips)
-        return new_query
 
     @cached_property
     def aggressive_queryset(self):
