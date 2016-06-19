@@ -71,6 +71,7 @@ class SkipFieldsExtension(WrappingExtension):
 
 
 class _FilteredQueryOptimizer(object):
+    """decorator object for QueryOptimizer"""
     def __init__(self, optimizer, skips):
         self._optimizer = optimizer
         self.skips = skips
@@ -111,12 +112,30 @@ class PrefetchFilterExtension(OnPrefetchExtension):
         return functools.reduce(lambda qs, f: f(qs), filters, prefetch_qs)
 
 
-class CustomPrefetchExtension(OnPrefetchExtension):
+class CustomPrefetchExtension(WrappingExtension):
     """like a Prefetch(<name>, <queryset>, to_attr=<attrname>)"""
     name = "custom_prefetch"
 
-    def __init__(self, prefetch):
-        self.prefetch = prefetch
+    def setup(self, aqs):
+        # print(aqs.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@")
+        new_query = aqs._clone()
+        # print(new_query.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@@")
+        new_extractor = new_query.optimizer.transaction.extractor
+        new_extractor.hintmap = _CustomAttributesHintMap(new_extractor.hintmap)
+        return new_query
 
     def __call__(self, qs):
         self.qs.prefetch
+
+
+class _CustomAttributesHintMap(object):
+    """decorator object for HintMap"""
+    def __init__(self, hintmap):
+        self.hintmap = hintmap
+
+    def __getattr__(self, k):
+        return getattr(self.hintmap, k)
+
+    def iterator(self, model, tokens, history=None):
+        print(model.__name__, tokens, history, "@@")
+        return self.hintmap.iterator(model, tokens, history=history)

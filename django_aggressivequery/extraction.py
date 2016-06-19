@@ -93,11 +93,13 @@ class HintMap(object):
 class HintExtractor(object):
     ALL = "*"
 
-    def __init__(self, sorted=True):
-        # TODO
+    def __init__(self, sorted=True, hintmap=None):
         self.sorted = sorted
         self.bidirectional = False
-        self.hintmap = HintMap()
+        self.hintmap = hintmap or HintMap()
+
+    def __copy__(self):
+        return self.__class__(sorted=self.sorted, hintmap=self.hintmap)
 
     def extract(self, model, name_list):
         backref = set()

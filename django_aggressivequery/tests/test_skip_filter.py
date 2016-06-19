@@ -30,6 +30,6 @@ class SkipFilterTests(TestCase):
         self.assertNotIn('LEFT OUTER JOIN "customerkarma"', str(aqs.query))
 
     def test_foo(self):
-        from django_aggressivequery import default_hint_extractor
-        result = default_hint_extractor.extract(m.Customer, ["name", "age"])
-        print(result)
+        aqs = self._makeOne(m.CustomerPosition.objects.all(), ["*", "age"], more_specific=True)
+        aqs = aqs.custom_prefetch()
+        print(aqs.query)

@@ -107,7 +107,7 @@ class QueryOptimizer(object):
 
     def __copy__(self):
         return self.__class__(
-            copy.copy(self.transaction),
+            transaction=copy.copy(self.transaction),
             enable_selections=self.enable_selections,
             extensions=copy.copy(self.extensions)
         )
@@ -248,6 +248,13 @@ class ExtractorTransaction(object):
         self.name_list = name_list
         self.extractor = extractor or extraction.HintExtractor()
 
+    def __copy__(self):
+        return self.__class__(
+            self.qs._clone(),
+            copy.copy(self.name_list),
+            copy.copy(self.extractor)
+        )
+
     @cached_property
     def result(self):
         return self.extractor.extract(self.qs.model, self.name_list)
@@ -263,6 +270,7 @@ default_extension_repository = (
     ex.ExtensionRepository()
     .register(ex.PrefetchFilterExtension())
     .register(ex.SkipFieldsExtension())
+    .register(ex.CustomPrefetchExtension())
 )
 
 
