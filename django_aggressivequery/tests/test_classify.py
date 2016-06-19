@@ -5,7 +5,7 @@ from . import models as m
 
 class ExtractorClassifyTests(TestCase):
     def _makeOne(self):
-        from django_aggressivequery import HintExtractor
+        from django_aggressivequery.extraction import HintExtractor
         return HintExtractor()
 
     def _makeInspector(self):

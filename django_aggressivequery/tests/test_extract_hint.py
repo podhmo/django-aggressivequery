@@ -5,7 +5,7 @@ from . import models as m
 
 class ExtractHintDictTests(TestCase):
     def _callFUT(self, model):
-        from django_aggressivequery import HintMap
+        from django_aggressivequery.extraction import HintMap
         return HintMap().extract(model)
 
     def test_for_prepare__load_candidates(self):

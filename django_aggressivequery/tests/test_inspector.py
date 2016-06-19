@@ -9,7 +9,7 @@ class InpectorCollectPrefetchTargetsTests(TestCase):
         return Inspector
 
     def _makeExtractor(self):
-        from django_aggressivequery import HintExtractor
+        from django_aggressivequery.extraction import HintExtractor
         return HintExtractor()
 
     def _makeOne(self, extractor):

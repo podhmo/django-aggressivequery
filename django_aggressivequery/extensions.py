@@ -7,6 +7,7 @@ from .structures import excluded_result, dict_from_keys
 
 # extension type
 extension_types = [":prefetch", ":selecting", ":join", ":wrap"]
+# TODO: apply extension (:selecting, :join)
 
 
 class ExtensionRepository(object):
@@ -119,10 +120,3 @@ class CustomPrefetchExtension(OnPrefetchExtension):
 
     def __call__(self, qs):
         self.qs.prefetch
-
-
-default_extension_repository = (
-    ExtensionRepository()
-    .register(PrefetchFilterExtension())
-    .register(SkipFieldsExtension())
-)
