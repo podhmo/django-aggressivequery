@@ -194,6 +194,7 @@ class HintExtractor(object):
             d[r.name] = r
         else:
             cr = d[r.name]
+            # TODO: deep merge
             cr.hints.update(r.hints)  # xxx
             cr.subresults.update(r.subresults)  # xxx
 
