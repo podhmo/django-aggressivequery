@@ -115,3 +115,14 @@ class ExtractorClassifyTests(TestCase):
         self.assertEqual(inspector.depth(actual), 3)
         expected = "Result(fields=[Hint(name='id')], reverse_related=[Hint(name='customer')], subresults=[Result(name='customer', fields=[Hint(name='id')], related=[Hint(name='customerposition')], subresults=[Result(name='customerposition', fields=[Hint(name='id')])])])"
         self.assertEqual(str(actual), expected)
+
+    def test__no_duplicated(self):
+        model = m.CustomerPosition
+        query1 = ["customer__*"]
+        actual11 = self._makeOne().extract(model, query1)
+        actual12 = self._makeOne().extract(model, query1)
+        self.assertEqual(actual11, actual12)
+
+        query2 = ["customer__karma", "customer__*"]
+        actual21 = self._makeOne().extract(model, query2)
+        self.assertEqual(actual11, actual21)
