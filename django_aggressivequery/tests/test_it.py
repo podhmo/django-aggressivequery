@@ -138,10 +138,9 @@ customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
                 for order in customer.orders.all():
                     item_desc = ", ".join("{}({})".format(item.name, item.price) for item in order.items.all())
                     buf.append("customer: {}, order: {}, items: {}".format(customer.name, order.name, item_desc))
-            print("\n".join(buf))
-#             expected = """\
-# customer: foo, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
-# customer: bar, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
-# customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
-#             actual = "\n".join(buf)
-#             self.assertEqual(expected, actual)
+            expected = """\
+customer: foo, order: order-1, items: order-1-item-a(10), order-1-item-b(20), order-1-item-c(0)
+customer: bar, order: order-1, items: order-1-item-a(10), order-1-item-b(20), order-1-item-c(0)
+customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
