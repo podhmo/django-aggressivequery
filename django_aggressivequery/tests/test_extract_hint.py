@@ -60,6 +60,7 @@ class ExtractHintDictTests(TestCase):
             'memo2',
             'memo3',
             'order',
+            'subitems',
         ]
         self.assertEqual(tuple(sorted(candidates.keys())), tuple(sorted(expected)))
 
