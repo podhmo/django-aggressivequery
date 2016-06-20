@@ -135,7 +135,7 @@ class HintExtractor(object):
     def drilldown(self, model, name_list, backref, history, indent=0):
         parent_name = history[-1]
         logger.info("%s name=%r model=%r %r", " " * (indent + indent), parent_name, model.__name__, name_list)
-        hints = {}
+        hints = OrderedDict()
         names = set()
         rels = defaultdict(list)
         for name in name_list:
@@ -182,14 +182,21 @@ class HintExtractor(object):
                     backref.remove(k)
         return TmpResult(name=parent_name, hints=hints, subresults=subresults_dict)
 
-    def _merge(self, d, r):
-        if r.name not in d:
-            d[r.name] = r
+    def _merge(self, result_dict, tr):
+        if tr.name not in result_dict:
+            result_dict[tr.name] = tr
         else:
-            cr = d[r.name]
-            # TODO: deep merge
-            cr.hints.update(r.hints)  # xxx
-            cr.subresults.update(r.subresults)  # xxx
+            cr = result_dict[tr.name]
+            merge_tmp_result(cr, tr)
+
+
+def merge_tmp_result(tr0, tr1):
+    tr0.hints.update(tr1.hints)
+    for name in tr1.subresults.keys():
+        if name not in tr0.subresults:
+            tr0.subresults[name] = tr1.subresults[name]
+        else:
+            merge_tmp_result(tr0.subresults[name], tr1.subresults[name])
 
 
 if django.VERSION >= (1, 8):
