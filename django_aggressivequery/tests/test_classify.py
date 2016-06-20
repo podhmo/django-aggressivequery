@@ -12,7 +12,7 @@ class ExtractorClassifyTests(TestCase):
         from django_aggressivequery import Inspector
         return Inspector()
 
-    # relation: CustomerKarma - Customer *-* Order -* Item, Customer -* CustomerPosition
+    # relation: CustomerKarma - Customer *-* Order -* Item, Customer -* Customerposition
     def test_it_nest1__star(self):
         model = m.CustomerKarma
         query = ["*"]
@@ -31,7 +31,7 @@ class ExtractorClassifyTests(TestCase):
         model = m.Customer
         query = ["*__id"]
         actual = self._makeOne().extract(model, query)
-        expected = "Result(related=[Hint(name='customerposition'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition', fields=[Hint(name='id')]), Result(name='karma', fields=[Hint(name='id')]), Result(name='orders', fields=[Hint(name='id')])])"
+        expected = "Result(related=[Hint(name='customerposition_set'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition_set', fields=[Hint(name='id')]), Result(name='karma', fields=[Hint(name='id')]), Result(name='orders', fields=[Hint(name='id')])])"
         self.assertEqual(str(actual), expected)
 
     def test_it_nest2__star_id__order(self):
@@ -48,7 +48,7 @@ class ExtractorClassifyTests(TestCase):
         expected = "Result(related=[Hint(name='subitems')], reverse_related=[Hint(name='order')], subresults=[Result(name='order', fields=[Hint(name='id')]), Result(name='subitems', fields=[Hint(name='id')])])"
         self.assertEqual(str(actual), expected)
 
-    def test_it_nest2__star_id__customerposition(self):
+    def test_it_nest2__star_id__customerposition_set(self):
         model = m.CustomerPosition
         query = ["*__id"]
         actual = self._makeOne().extract(model, query)
@@ -57,9 +57,9 @@ class ExtractorClassifyTests(TestCase):
 
     def test_it_nest__each_field__customer(self):
         model = m.Customer
-        query = ["karma__memo1", "orders__memo2", "customerposition__memo3"]
+        query = ["karma__memo1", "orders__memo2", "customerposition_set__memo3"]
         actual = self._makeOne().extract(model, query)
-        expected = "Result(related=[Hint(name='customerposition'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition', fields=[Hint(name='memo3')]), Result(name='karma', fields=[Hint(name='memo1')]), Result(name='orders', fields=[Hint(name='memo2')])])"
+        expected = "Result(related=[Hint(name='customerposition_set'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition_set', fields=[Hint(name='memo3')]), Result(name='karma', fields=[Hint(name='memo1')]), Result(name='orders', fields=[Hint(name='memo2')])])"
         self.assertEqual(str(actual), expected)
 
     def test_it_nest3__star_id__item(self):
@@ -83,7 +83,7 @@ class ExtractorClassifyTests(TestCase):
 
         inspector = self._makeInspector()
         self.assertEqual(inspector.depth(actual), 6)
-        expected = "Result(fields=[Hint(name='id')], related=[Hint(name='subitems')], reverse_related=[Hint(name='order')], subresults=[Result(name='order', fields=[Hint(name='id')], reverse_related=[Hint(name='customers')], subresults=[Result(name='customers', fields=[Hint(name='id')], related=[Hint(name='customerposition'), Hint(name='karma')], subresults=[Result(name='customerposition', fields=[Hint(name='id')], reverse_related=[Hint(name='customer'), Hint(name='substitute')], subresults=[Result(name='customer', fields=[Hint(name='id')], related=[Hint(name='customerposition'), Hint(name='karma')], subresults=[Result(name='customerposition', fields=[Hint(name='id')]), Result(name='karma', fields=[Hint(name='id')])]), Result(name='substitute', fields=[Hint(name='id')], related=[Hint(name='karma')], subresults=[Result(name='karma', fields=[Hint(name='id')])])]), Result(name='karma', fields=[Hint(name='id')])])]), Result(name='subitems', fields=[Hint(name='id')])])"
+        expected = "Result(fields=[Hint(name='id')], related=[Hint(name='subitems')], reverse_related=[Hint(name='order')], subresults=[Result(name='order', fields=[Hint(name='id')], reverse_related=[Hint(name='customers')], subresults=[Result(name='customers', fields=[Hint(name='id')], related=[Hint(name='customerposition_set'), Hint(name='karma')], subresults=[Result(name='customerposition_set', fields=[Hint(name='id')], reverse_related=[Hint(name='customer'), Hint(name='substitute')], subresults=[Result(name='customer', fields=[Hint(name='id')], related=[Hint(name='customerposition_set'), Hint(name='karma')], subresults=[Result(name='customerposition_set', fields=[Hint(name='id')]), Result(name='karma', fields=[Hint(name='id')])]), Result(name='substitute', fields=[Hint(name='id')], related=[Hint(name='karma')], subresults=[Result(name='karma', fields=[Hint(name='id')])])]), Result(name='karma', fields=[Hint(name='id')])])]), Result(name='subitems', fields=[Hint(name='id')])])"
         self.assertEqual(str(actual), expected)
 
     def test_it_nest6__id__customer(self):
@@ -93,7 +93,7 @@ class ExtractorClassifyTests(TestCase):
 
         inspector = self._makeInspector()
         self.assertEqual(inspector.depth(actual), 4)
-        expected = "Result(fields=[Hint(name='id')], related=[Hint(name='customerposition'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition', fields=[Hint(name='id')]), Result(name='karma', fields=[Hint(name='id')]), Result(name='orders', fields=[Hint(name='id')], related=[Hint(name='items')], subresults=[Result(name='items', fields=[Hint(name='id')], related=[Hint(name='subitems')], subresults=[Result(name='subitems', fields=[Hint(name='id')])])])])"
+        expected = "Result(fields=[Hint(name='id')], related=[Hint(name='customerposition_set'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition_set', fields=[Hint(name='id')]), Result(name='karma', fields=[Hint(name='id')]), Result(name='orders', fields=[Hint(name='id')], related=[Hint(name='items')], subresults=[Result(name='items', fields=[Hint(name='id')], related=[Hint(name='subitems')], subresults=[Result(name='subitems', fields=[Hint(name='id')])])])])"
         self.assertEqual(str(actual), expected)
 
     def test_it_nest6__star__customer(self):
@@ -103,17 +103,17 @@ class ExtractorClassifyTests(TestCase):
 
         inspector = self._makeInspector()
         self.assertEqual(inspector.depth(actual), 4)
-        expected = "Result(fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name')], related=[Hint(name='customerposition'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name')]), Result(name='karma', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='point')]), Result(name='orders', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name'), Hint(name='price')], related=[Hint(name='items')], subresults=[Result(name='items', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name'), Hint(name='price')], related=[Hint(name='subitems')], subresults=[Result(name='subitems', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name')])])])])"
+        expected = "Result(fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name')], related=[Hint(name='customerposition_set'), Hint(name='karma'), Hint(name='orders')], subresults=[Result(name='customerposition_set', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name')]), Result(name='karma', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='point')]), Result(name='orders', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name'), Hint(name='price')], related=[Hint(name='items')], subresults=[Result(name='items', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name'), Hint(name='price')], related=[Hint(name='subitems')], subresults=[Result(name='subitems', fields=[Hint(name='id'), Hint(name='memo1'), Hint(name='memo2'), Hint(name='memo3'), Hint(name='name')])])])])"
         self.assertEqual(str(actual), expected)
 
     def test_it_usualy_case(self):
         model = m.CustomerKarma
-        query = ["id", "customer__id", "customer__customerposition__id"]
+        query = ["id", "customer__id", "customer__customerposition_set__id"]
         actual = self._makeOne().extract(model, query)
 
         inspector = self._makeInspector()
         self.assertEqual(inspector.depth(actual), 3)
-        expected = "Result(fields=[Hint(name='id')], reverse_related=[Hint(name='customer')], subresults=[Result(name='customer', fields=[Hint(name='id')], related=[Hint(name='customerposition')], subresults=[Result(name='customerposition', fields=[Hint(name='id')])])])"
+        expected = "Result(fields=[Hint(name='id')], reverse_related=[Hint(name='customer')], subresults=[Result(name='customer', fields=[Hint(name='id')], related=[Hint(name='customerposition_set')], subresults=[Result(name='customerposition_set', fields=[Hint(name='id')])])])"
         self.assertEqual(str(actual), expected)
 
     def test__no_duplicated(self):
