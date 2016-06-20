@@ -10,8 +10,8 @@ Hint = namedtuple(
     "Hint",
     "name, is_relation, is_reverse_related, rel_name, rel_fk, rel_model, field"
 )
-FakeHint = namedtuple(
-    "FakeHint",
+CustomHint = namedtuple(
+    "CustomHint",
     "name, type, is_relation, value, rel_model, rel_name, is_reverse_related"
 )
 TmpResult = namedtuple(

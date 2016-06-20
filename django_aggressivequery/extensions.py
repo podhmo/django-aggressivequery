@@ -3,7 +3,7 @@ import copy
 import functools
 from collections import defaultdict
 from .functional import cached_property
-from .structures import excluded_result, dict_from_keys, FakeHint
+from .structures import excluded_result, dict_from_keys, CustomHint
 
 # extension type
 extension_types = [":prefetch", ":selecting", ":join", ":wrap"]
@@ -176,7 +176,7 @@ class _CustomAttributesHintIterator(object):
                 if full_name in self.hintmap.prefetchs:
                     prefetch = self.hintmap.prefetchs[full_name]
                     rel_model = prefetch.queryset.model
-                    hint = FakeHint(name=t,
+                    hint = CustomHint(name=t,
                                     is_relation=True,
                                     value=prefetch,
                                     rel_model=rel_model,
@@ -199,5 +199,4 @@ class _CustomAttributesHintMap(object):
         return getattr(self.hintmap, k)
 
     def iterator(self, model, tokens, history=None):
-        print(model.__name__, tokens, history, "@@")
         return self.iterator_cls(self, history, self.hintmap.iterator(model, tokens, history=history))

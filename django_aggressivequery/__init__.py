@@ -30,7 +30,7 @@ class Inspector(object):
         # can join: one to one*, one* to one, many to one
         matched = {}
         for h in result.related:
-            # fakehint
+            # custom_hint
             if hasattr(h, "type"):
                 if type == ":join":
                     matched[h.name] = h
@@ -47,7 +47,7 @@ class Inspector(object):
     def collect_prefetch_list(self, result):
         matched = {}
         for h in result.related:
-            # fakehint
+            # custom_hint
             if hasattr(h, "type"):
                 if h.type == ":prefetch":
                     matched[h.name] = h
@@ -292,7 +292,7 @@ def from_queryset(qs, name_list, more_specific=False,
                   extensions=default_extension_repository):
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
-
+    qs = qs.all() if not hasattr(qs, "_clone") else qs
     specific_list = name_list if more_specific else include_star_selection(name_list)
     ex_transaction = ExtractorTransaction(qs, specific_list)
     optimizer = QueryOptimizer(ex_transaction, enable_selections=more_specific, extensions=extensions)
