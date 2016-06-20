@@ -214,6 +214,7 @@ class LazyJoin(LazyPair):
 
 class LazyPrefetch(LazyPair):
     def __call__(self, prefetch_qs, to_attr=None):
+        self.name = self.name.replace("customerposition", "customerposition_set")
         return Prefetch(self.name, queryset=prefetch_qs, to_attr=to_attr)
 
 
@@ -307,4 +308,4 @@ def include_star_selection(name_list):
         xs = s.split("__")
         for i in range(1, len(xs) + 1):
             star_list.append("{}__*".format("__".join(xs[:i])))
-    return name_list + star_list
+    return star_list

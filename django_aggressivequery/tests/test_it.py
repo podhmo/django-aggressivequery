@@ -127,3 +127,21 @@ customer: bar, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
 customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)
+
+    # skip filter
+    def test_it__skip_filter(self):
+        qs = m.Customer.objects
+        optimized = self._callFUT(qs, ["*__*", "orders__items"]).skip_filter(["customerposition"])
+        with self.assertNumQueries(3):
+            buf = []
+            for customer in optimized:
+                for order in customer.orders.all():
+                    item_desc = ", ".join("{}({})".format(item.name, item.price) for item in order.items.all())
+                    buf.append("customer: {}, order: {}, items: {}".format(customer.name, order.name, item_desc))
+            print("\n".join(buf))
+#             expected = """\
+# customer: foo, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
+# customer: bar, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
+# customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
+#             actual = "\n".join(buf)
+#             self.assertEqual(expected, actual)

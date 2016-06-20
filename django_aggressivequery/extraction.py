@@ -117,7 +117,7 @@ class HintExtractor(object):
                         related=[],
                         reverse_related=[],
                         subresults=[])
-        for h in self.seq(tmp_result.hints, key=lambda h: h.name):
+        for h in self.seq(tmp_result.hints.values(), key=lambda h: h.name):
             if not h.is_relation:
                 result.fields.append(h)
                 continue
@@ -127,28 +127,37 @@ class HintExtractor(object):
             else:
                 result.related.append(h)
 
-        for sr in self.seq(tmp_result.subresults, key=lambda r: r.name):
+        for sr in self.seq(tmp_result.subresults.values(), key=lambda r: r.name):
             result.subresults.append(self.classify(sr))
         return result
 
     def drilldown(self, model, name_list, backref, history, indent=0):
         parent_name = history[-1]
         logger.info("%s name=%r model=%r %r", " " * (indent + indent), parent_name, model.__name__, name_list)
-        hints = set()
-        names = []
+        hints = {}
+        names = set()
         rels = defaultdict(list)
+        alls = set()
         for name in name_list:
             if name == self.ALL:
-                names.append(NOREL)
+                names.add(NOREL)
             elif "__" not in name:
-                names.append(name)
+                if name not in rels:
+                    names.add(name)
             else:
                 prefix, sub_name = name.split("__", 1)
-                rels[prefix].append(sub_name)
-
+                if prefix in alls:
+                    continue
+                if prefix in rels:
+                    names.discard(prefix)
+                if sub_name == ALL:
+                    alls.add(prefix)
+                    rels[prefix] = [sub_name]
+                else:
+                    rels[prefix].append(sub_name)
         iterator = self.hintmap.iterator(model, names, history=history)
         for hint, _ in iterator:
-            hints.add(hint)
+            hints[hint.name] = hint
 
         subresults_dict = OrderedDict()
         for prefix, sub_name_list in rels.items():
@@ -165,7 +174,7 @@ class HintExtractor(object):
                         logger.info("\t\t\tskip %s %s %s", model.__name__, hint.name, hint.rel_model.__name__)
                         continue
                 backref.add(k)
-                hints.add(hint)
+                hints[hint.name] = hint
                 history.append(hint.name)
                 self._merge(
                     subresults_dict,
@@ -177,15 +186,15 @@ class HintExtractor(object):
                 history.pop()
                 if k in backref:
                     backref.remove(k)
-        return TmpResult(name=parent_name, hints=list(hints), subresults=list(subresults_dict.values()))
+        return TmpResult(name=parent_name, hints=hints, subresults=subresults_dict)
 
     def _merge(self, d, r):
         if r.name not in d:
             d[r.name] = r
         else:
             cr = d[r.name]
-            cr.hints.extend(r.hints)
-            cr.subresults.extend(r.subresults)
+            cr.hints.update(r.hints)  # xxx
+            cr.subresults.update(r.subresults)  # xxx
 
 
 if django.VERSION >= (1, 8):
