@@ -18,12 +18,12 @@ class Tests(TestCase):
         m.CustomerPosition.objects.create(name="2nd", customer=bar, substitute=foo)
 
         order1 = m.Order.objects.create(name="order-1")
-        m.Item.objects.create(name="order-1-item-a", order=order1)
-        m.Item.objects.create(name="order-1-item-b", order=order1)
-        m.Item.objects.create(name="order-1-item-c", order=order1)
+        m.Item.objects.create(name="order-1-item-a", order=order1, price=10)
+        m.Item.objects.create(name="order-1-item-b", order=order1, price=20)
+        m.Item.objects.create(name="order-1-item-c", order=order1, price=0)
         order2 = m.Order.objects.create(name="order-2")
-        m.Item.objects.create(name="order-2-item-a", order=order2)
-        m.Item.objects.create(name="order-2-item-b", order=order2)
+        m.Item.objects.create(name="order-2-item-a", order=order2, price=10)
+        m.Item.objects.create(name="order-2-item-b", order=order2, price=20)
         order1.customers.add(foo)
         order1.customers.add(bar)
         order1.save()
@@ -105,5 +105,25 @@ karma: 10, customer: bar
             expected = """\
 position: 1st, customer: foo, karma: 0
 position: 2nd, customer: bar, karma: 10"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
+
+    # custom prefetch
+    def test_it__custom_prefetch(self):
+        from django.db.models import Prefetch
+        qs = m.Customer.objects
+        optimized = self._callFUT(qs, ["orders__valuable_items"]).custom_prefetch(
+            orders__valuable_items=Prefetch("items", queryset=m.Item.objects.filter(price__gt=0), to_attr="valuable_items")
+        )
+        with self.assertNumQueries(3):
+            buf = []
+            for customer in optimized:
+                for order in customer.orders.all():
+                    item_desc = ", ".join("{}({})".format(item.name, item.price) for item in order.valuable_items)
+                    buf.append("customer: {}, order: {}, items: {}".format(customer.name, order.name, item_desc))
+            expected = """\
+customer: foo, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
+customer: bar, order: order-1, items: order-1-item-a(10), order-1-item-b(20)
+customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)

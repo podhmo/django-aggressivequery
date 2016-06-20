@@ -153,8 +153,10 @@ class QueryOptimizer(object):
         prefetch_targets = []
         extension_list = self.extensions.with_type(":prefetch")
         for lazy_prefetch in lazy_prefetch_list:
-            if hasattr(lazy_prefetch.hint, "type") and lazy_prefetch.hint.type == ":prefetch":  # fake hint
+            if hasattr(lazy_prefetch.hint, "type") and lazy_prefetch.hint.type == ":prefetch":  # custom hint
                 prefetch_qs, to_attr = lazy_prefetch.hint.value.queryset, lazy_prefetch.hint.name
+                # xxx: TODO: management lookup_name and to_attr name explicitly
+                lazy_prefetch.name = lazy_prefetch.name.replace(lazy_prefetch.hint.name, lazy_prefetch.hint.value.prefetch_through)
             else:
                 prefetch_qs, to_attr = lazy_prefetch.hint.rel_model.objects.all(), None  # default
             for extension in extension_list:

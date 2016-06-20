@@ -126,9 +126,7 @@ class CustomPrefetchExtension(WrappingExtension):
         return self.__class__(prefetchs=copy.copy(self.prefetchs))
 
     def setup(self, aqs, **prefetchs):
-        # print(aqs.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@")
         new_aqs = aqs._clone()
-        # print(new_aqs.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@@")
         new_extractor = new_aqs.optimizer.transaction.extractor
         new_extractor.hintmap = _CustomAttributesHintMap(new_extractor.hintmap, prefetchs)
         new_extension = self.get_self_from_aqs(new_aqs)
@@ -162,7 +160,7 @@ class _CustomAttributesHintIterator(object):
                 yield v
 
     def custom_iterator(self):
-        prefix_list = self.history[:-1]
+        prefix_list = self.history[1:]
         suffixes = self.hintmap.suffixes
         for t in self.iterator.tokens:
             if t in self.iterator.history:
@@ -177,12 +175,12 @@ class _CustomAttributesHintIterator(object):
                     prefetch = self.hintmap.prefetchs[full_name]
                     rel_model = prefetch.queryset.model
                     hint = CustomHint(name=t,
-                                    is_relation=True,
-                                    value=prefetch,
-                                    rel_model=rel_model,
-                                    rel_name=t,
-                                    is_reverse_related=False,
-                                    type=":prefetch")
+                                      is_relation=True,
+                                      value=prefetch,
+                                      rel_model=rel_model,
+                                      rel_name=t,
+                                      is_reverse_related=False,
+                                      type=":prefetch")
                     yield hint, False
 
 
