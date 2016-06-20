@@ -67,9 +67,12 @@ class SkipFieldsExtension(WrappingExtension):
     """skipping needless fields"""
     name = "skip_filter"
 
-    def setup(self, aqs, skips):
+    def setup(self, aqs, skip_list):
+        if not isinstance(skip_list, (tuple, list)):
+            raise ValueError("skip_list is only tuple or list type. (['name'] rather than 'name')")
+
         new_aqs = aqs._clone()
-        new_aqs.optimizer = _FilteredQueryOptimizer(new_aqs.optimizer, skips)
+        new_aqs.optimizer = _FilteredQueryOptimizer(new_aqs.optimizer, skip_list)
         return new_aqs
 
 
