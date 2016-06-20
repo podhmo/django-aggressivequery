@@ -4,6 +4,8 @@ from . import models as m
 
 
 class SkipFilterTests(TestCase):
+    """extension skip_filter test"""
+
     def _makeOne(self, *args, **kwargs):
         from django_aggressivequery import from_queryset
         return from_queryset(*args, **kwargs)
@@ -28,8 +30,3 @@ class SkipFilterTests(TestCase):
         aqs = aqs.skip_filter(["customer__karma", "substitute__karma"])
         self.assertIn('INNER JOIN "customer"', str(aqs.query))
         self.assertNotIn('LEFT OUTER JOIN "customerkarma"', str(aqs.query))
-
-    def test_foo(self):
-        aqs = self._makeOne(m.CustomerPosition.objects.all(), ["*", "age"], more_specific=True)
-        aqs = aqs.custom_prefetch()
-        print(aqs.query)

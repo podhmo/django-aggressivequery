@@ -30,6 +30,11 @@ class Inspector(object):
         # can join: one to one*, one* to one, many to one
         matched = {}
         for h in result.related:
+            # fakehint
+            if hasattr(h, "type"):
+                if type == ":join":
+                    matched[h.name] = h
+                continue
             if isinstance(h.field.field, (related.OneToOneField)):
                 matched[h.name] = h
         for h in result.reverse_related:
@@ -42,6 +47,11 @@ class Inspector(object):
     def collect_prefetch_list(self, result):
         matched = {}
         for h in result.related:
+            # fakehint
+            if hasattr(h, "type"):
+                if h.type == ":prefetch":
+                    matched[h.name] = h
+                continue
             if isinstance(h.field.field, (related.ManyToManyField, related.ForeignKey)):
                 if not isinstance(h.field.field, related.OneToOneField):
                     matched[h.name] = h
@@ -143,16 +153,19 @@ class QueryOptimizer(object):
         prefetch_targets = []
         extension_list = self.extensions.with_type(":prefetch")
         for lazy_prefetch in lazy_prefetch_list:
-            prefetch_qs = lazy_prefetch.hint.rel_model.objects.all()  # default
+            if hasattr(lazy_prefetch.hint, "type") and lazy_prefetch.hint.type == ":prefetch":  # fake hint
+                prefetch_qs, to_attr = lazy_prefetch.hint.value.queryset, lazy_prefetch.hint.name
+            else:
+                prefetch_qs, to_attr = lazy_prefetch.hint.rel_model.objects.all(), None  # default
             for extension in extension_list:
                 prefetch_qs = extension.apply(prefetch_qs, lazy_prefetch.name)
 
             prefetch_qs, sub_lazy_prefch = self._optimize_join(prefetch_qs, lazy_prefetch.result, name=lazy_prefetch.name)
-            if lazy_prefetch.hint.rel_fk:
+            if not hasattr(lazy_prefetch.hint, "type") and lazy_prefetch.hint.rel_fk:
                 prefetch_qs = self._optimize_selections(prefetch_qs, lazy_prefetch.result, externals=[lazy_prefetch.hint.rel_fk])
             else:
                 prefetch_qs = self._optimize_selections(prefetch_qs, lazy_prefetch.result)
-            prefetch_targets.append(lazy_prefetch(prefetch_qs))
+            prefetch_targets.append(lazy_prefetch(prefetch_qs, to_attr=to_attr))
         return reset_prefetch_related(qs, prefetch_targets)
 
     def collect_lazy_join_list_recursive(self, result, name=None):
@@ -280,16 +293,16 @@ def from_queryset(qs, name_list, more_specific=False,
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
 
-    specific_list = name_list if more_specific else more_specific_selection(name_list)
+    specific_list = name_list if more_specific else include_star_selection(name_list)
     ex_transaction = ExtractorTransaction(qs, specific_list)
     optimizer = QueryOptimizer(ex_transaction, enable_selections=more_specific, extensions=extensions)
     return AggressiveQuery(qs, optimizer)
 
 
-def more_specific_selection(name_list):
-    specific_list = ["*"]
+def include_star_selection(name_list):
+    star_list = ["*"]
     for s in name_list:
         xs = s.split("__")
         for i in range(1, len(xs) + 1):
-            specific_list.append("{}__*".format("__".join(xs[:i])))
-    return specific_list
+            star_list.append("{}__*".format("__".join(xs[:i])))
+    return name_list + star_list

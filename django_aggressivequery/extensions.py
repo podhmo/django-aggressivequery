@@ -3,7 +3,7 @@ import copy
 import functools
 from collections import defaultdict
 from .functional import cached_property
-from .structures import excluded_result, dict_from_keys
+from .structures import excluded_result, dict_from_keys, FakeHint
 
 # extension type
 extension_types = [":prefetch", ":selecting", ":join", ":wrap"]
@@ -43,6 +43,9 @@ class Extension(object):
     def apply(self, aqs):
         raise NotImplementedError("apply")
 
+    def get_self_from_aqs(self, aqs):
+        return aqs.optimizer.extensions.with_name(self.name)
+
 
 class OnPrefetchExtension(Extension):
     type = ":prefetch"
@@ -65,9 +68,9 @@ class SkipFieldsExtension(WrappingExtension):
     name = "skip_filter"
 
     def setup(self, aqs, skips):
-        new_query = aqs._clone()
-        new_query.optimizer = _FilteredQueryOptimizer(new_query.optimizer, skips)
-        return new_query
+        new_aqs = aqs._clone()
+        new_aqs.optimizer = _FilteredQueryOptimizer(new_aqs.optimizer, skips)
+        return new_aqs
 
 
 class _FilteredQueryOptimizer(object):
@@ -101,11 +104,11 @@ class PrefetchFilterExtension(OnPrefetchExtension):
         return self.__class__(filters=copy.copy(self.filters))
 
     def setup(self, aqs, **conditions):
-        new_qs = aqs._clone()
-        new_extension = new_qs.optimizer.extensions.with_name(self.name)
+        new_aqs = aqs._clone()
+        new_extension = self.get_self_from_aqs(new_aqs)
         for name, filter_fn in conditions.items():
             new_extension.filters[name].append(filter_fn)
-        return new_qs
+        return new_aqs
 
     def apply(self, prefetch_qs, name):
         filters = self.filters[name]
@@ -116,26 +119,85 @@ class CustomPrefetchExtension(WrappingExtension):
     """like a Prefetch(<name>, <queryset>, to_attr=<attrname>)"""
     name = "custom_prefetch"
 
-    def setup(self, aqs):
+    def __init__(self, prefetchs=None):
+        self.prefetchs = prefetchs or {}
+
+    def __copy__(self):
+        return self.__class__(prefetchs=copy.copy(self.prefetchs))
+
+    def setup(self, aqs, **prefetchs):
         # print(aqs.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@")
-        new_query = aqs._clone()
-        # print(new_query.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@@")
-        new_extractor = new_query.optimizer.transaction.extractor
-        new_extractor.hintmap = _CustomAttributesHintMap(new_extractor.hintmap)
-        return new_query
+        new_aqs = aqs._clone()
+        # print(new_aqs.optimizer.transaction.extractor, id(aqs.optimizer.transaction.extractor), "@@@")
+        new_extractor = new_aqs.optimizer.transaction.extractor
+        new_extractor.hintmap = _CustomAttributesHintMap(new_extractor.hintmap, prefetchs)
+        new_extension = self.get_self_from_aqs(new_aqs)
+        for name, prefetch in prefetchs.items():
+            if not prefetch.to_attr:
+                raise ValueError("{}: custom_prefetch required a Prefetch object with `to_attr` option".format(name))
+            if prefetch.to_attr != name.rsplit("__", 1)[-1]:
+                raise ValueError("{}: custom_prefetch suffix is mismatch {} != {}".format(name, prefetch.to_attr, name))
+            new_extension.prefetchs[name] = prefetch
+        return new_aqs
 
     def __call__(self, qs):
         self.qs.prefetch
 
 
+class _CustomAttributesHintIterator(object):
+    def __init__(self, hintmap, history, iterator):
+        self.hintmap = hintmap  # _CustomAttributesHintMap
+        self.history = history
+        self.iterator = iterator
+
+    def clone(self, tokens):
+        return self.__class__(self.hintmap, self.history, self.iterator.clone(tokens))
+
+    def __iter__(self):
+        for v in self.iterator:
+            yield v
+        itr2 = self.custom_iterator()
+        if itr2:
+            for v in itr2:
+                yield v
+
+    def custom_iterator(self):
+        prefix_list = self.history[:-1]
+        suffixes = self.hintmap.suffixes
+        for t in self.iterator.tokens:
+            if t in self.iterator.history:
+                continue
+            self.iterator.history.add(t)
+
+            if t.endswith(suffixes):
+                prefix_list.append(t)
+                full_name = "__".join(prefix_list)
+                prefix_list.pop()
+                if full_name in self.hintmap.prefetchs:
+                    prefetch = self.hintmap.prefetchs[full_name]
+                    rel_model = prefetch.queryset.model
+                    hint = FakeHint(name=t,
+                                    is_relation=True,
+                                    value=prefetch,
+                                    rel_model=rel_model,
+                                    rel_name=t,
+                                    is_reverse_related=False,
+                                    type=":prefetch")
+                    yield hint, False
+
+
 class _CustomAttributesHintMap(object):
     """decorator object for HintMap"""
-    def __init__(self, hintmap):
+    iterator_cls = _CustomAttributesHintIterator
+
+    def __init__(self, hintmap, prefetchs):
         self.hintmap = hintmap
+        self.prefetchs = prefetchs
+        self.suffixes = tuple(k.rsplit("__", 1)[-1] for k in prefetchs.keys())
 
     def __getattr__(self, k):
         return getattr(self.hintmap, k)
 
     def iterator(self, model, tokens, history=None):
         print(model.__name__, tokens, history, "@@")
-        return self.hintmap.iterator(model, tokens, history=history)
+        return self.iterator_cls(self, history, self.hintmap.iterator(model, tokens, history=history))

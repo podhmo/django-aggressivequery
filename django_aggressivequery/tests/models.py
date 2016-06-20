@@ -59,3 +59,14 @@ class Item(models.Model):
 
     class Meta:
         db_table = "item"
+
+
+class SubItem(models.Model):
+    item = models.ForeignKey(Item, related_name="subitems", null=True)
+    name = models.CharField(max_length=255, default="", null=False)
+    memo1 = models.CharField(max_length=255, default="", null=False)  # for test
+    memo2 = models.CharField(max_length=255, default="", null=False)  # for test
+    memo3 = models.CharField(max_length=255, default="", null=False)  # for test
+
+    class Meta:
+        db_table = "subitem"
