@@ -138,7 +138,6 @@ class HintExtractor(object):
         hints = {}
         names = set()
         rels = defaultdict(list)
-        alls = set()
         for name in name_list:
             if name == self.ALL:
                 names.add(NOREL)
@@ -147,20 +146,14 @@ class HintExtractor(object):
                     names.add(name)
             else:
                 prefix, sub_name = name.split("__", 1)
-                if prefix in alls:
-                    continue
-                if prefix in rels:
-                    names.discard(prefix)
-                if sub_name == ALL:
-                    alls.add(prefix)
-                    rels[prefix] = [sub_name]
-                else:
-                    rels[prefix].append(sub_name)
+                rels[prefix].append(sub_name)
+
         iterator = self.hintmap.iterator(model, names, history=history)
         for hint, _ in iterator:
             hints[hint.name] = hint
 
         subresults_dict = OrderedDict()
+        # hints is dict? REL and explicit relation name.
         for prefix, sub_name_list in rels.items():
             if prefix == self.ALL:
                 prefix = REL
