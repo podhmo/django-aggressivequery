@@ -131,8 +131,24 @@ customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
     # skip filter
     def test_it__skip_filter(self):
         qs = m.Customer.objects
-        optimized = self._callFUT(qs, ["*__*", "orders__items"]).skip_filter(["customerposition"])
+        optimized = self._callFUT(qs, ["*__*", "orders__items"]).skip_filter(["customerposition_set"])
         with self.assertNumQueries(3):
+            buf = []
+            for customer in optimized:
+                for order in customer.orders.all():
+                    item_desc = ", ".join("{}({})".format(item.name, item.price) for item in order.items.all())
+                    buf.append("customer: {}, order: {}, items: {}".format(customer.name, order.name, item_desc))
+            expected = """\
+customer: foo, order: order-1, items: order-1-item-a(10), order-1-item-b(20), order-1-item-c(0)
+customer: bar, order: order-1, items: order-1-item-a(10), order-1-item-b(20), order-1-item-c(0)
+customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
+
+    def test_it__without_skip_filter(self):
+        qs = m.Customer.objects
+        optimized = self._callFUT(qs, ["*__*", "orders__items"])
+        with self.assertNumQueries(4):
             buf = []
             for customer in optimized:
                 for order in customer.orders.all():

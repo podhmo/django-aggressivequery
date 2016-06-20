@@ -65,6 +65,7 @@ class HintMap(object):
                     rel_model = f.rel.model
                     rel_fk = getattr(f.rel, "attname", None)
                 else:
+                    name = f.get_accessor_name()
                     rel_name = f.field.name
                     rel_model = f.field.model
                     rel_fk = getattr(f.field, "attname", None)

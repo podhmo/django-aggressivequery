@@ -214,7 +214,6 @@ class LazyJoin(LazyPair):
 
 class LazyPrefetch(LazyPair):
     def __call__(self, prefetch_qs, to_attr=None):
-        self.name = self.name.replace("customerposition", "customerposition_set")
         return Prefetch(self.name, queryset=prefetch_qs, to_attr=to_attr)
 
 
