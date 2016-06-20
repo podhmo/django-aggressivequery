@@ -134,7 +134,7 @@ class HintExtractor(object):
     def drilldown(self, model, name_list, backref, history, indent=0):
         parent_name = history[-1]
         logger.info("%s name=%r model=%r %r", " " * (indent + indent), parent_name, model.__name__, name_list)
-        hints = []
+        hints = set()
         names = []
         rels = defaultdict(list)
         for name in name_list:
@@ -148,7 +148,7 @@ class HintExtractor(object):
 
         iterator = self.hintmap.iterator(model, names, history=history)
         for hint, _ in iterator:
-            hints.append(hint)
+            hints.add(hint)
 
         subresults_dict = OrderedDict()
         for prefix, sub_name_list in rels.items():
@@ -165,7 +165,7 @@ class HintExtractor(object):
                         logger.info("\t\t\tskip %s %s %s", model.__name__, hint.name, hint.rel_model.__name__)
                         continue
                 backref.add(k)
-                hints.append(hint)
+                hints.add(hint)
                 history.append(hint.name)
                 self._merge(
                     subresults_dict,
@@ -177,7 +177,7 @@ class HintExtractor(object):
                 history.pop()
                 if k in backref:
                     backref.remove(k)
-        return TmpResult(name=parent_name, hints=hints, subresults=list(subresults_dict.values()))
+        return TmpResult(name=parent_name, hints=list(hints), subresults=list(subresults_dict.values()))
 
     def _merge(self, d, r):
         if r.name not in d:

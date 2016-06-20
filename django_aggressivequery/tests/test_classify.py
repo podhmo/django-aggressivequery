@@ -73,7 +73,7 @@ class ExtractorClassifyTests(TestCase):
         model = m.Item
         query = ["*__*__id", "order__items"]
         actual = self._makeOne().extract(model, query)
-        expected = "Result(related=[Hint(name='subitems')], reverse_related=[Hint(name='order'), Hint(name='order')], subresults=[Result(name='order', related=[Hint(name='items')], reverse_related=[Hint(name='customers')], subresults=[Result(name='customers', fields=[Hint(name='id')])]), Result(name='subitems')])"
+        expected = "Result(related=[Hint(name='subitems')], reverse_related=[Hint(name='order')], subresults=[Result(name='order', related=[Hint(name='items')], reverse_related=[Hint(name='customers')], subresults=[Result(name='customers', fields=[Hint(name='id')])]), Result(name='subitems')])"
         self.assertEqual(str(actual), expected)
 
     def test_it_nest6__id__item(self):
@@ -118,11 +118,11 @@ class ExtractorClassifyTests(TestCase):
 
     def test__no_duplicated(self):
         model = m.CustomerPosition
-        query1 = ["customer__*"]
+        query1 = ["customer__*__*"]
         actual11 = self._makeOne().extract(model, query1)
         actual12 = self._makeOne().extract(model, query1)
-        self.assertEqual(actual11, actual12)
+        self.assertEqual(str(actual11), str(actual12))
 
-        query2 = ["customer__karma", "customer__*"]
+        query2 = ["customer__karma", "customer__*__*"]
         actual21 = self._makeOne().extract(model, query2)
-        self.assertEqual(actual11, actual21)
+        self.assertEqual(str(actual11), str(actual21))
