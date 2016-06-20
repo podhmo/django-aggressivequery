@@ -131,7 +131,7 @@ class CustomPrefetchExtension(WrappingExtension):
     def setup(self, aqs, **prefetchs):
         new_aqs = aqs._clone()
         new_extractor = new_aqs.optimizer.transaction.extractor
-        new_extractor.hintmap = _CustomAttributesHintMap(new_extractor.hintmap, prefetchs)
+        new_extractor.hintmap = _CustomPrefetchHintMap(new_extractor.hintmap, prefetchs)
         new_extension = self.get_self_from_aqs(new_aqs)
         for name, prefetch in prefetchs.items():
             if not prefetch.to_attr:
@@ -145,9 +145,9 @@ class CustomPrefetchExtension(WrappingExtension):
         self.qs.prefetch
 
 
-class _CustomAttributesHintIterator(object):
+class _CustomPrefetchHintIterator(object):
     def __init__(self, hintmap, history, iterator):
-        self.hintmap = hintmap  # _CustomAttributesHintMap
+        self.hintmap = hintmap  # _CustomPrefetchHintMap
         self.history = history
         self.iterator = iterator
 
@@ -187,9 +187,9 @@ class _CustomAttributesHintIterator(object):
                     yield hint, False
 
 
-class _CustomAttributesHintMap(object):
+class _CustomPrefetchHintMap(object):
     """decorator object for HintMap"""
-    iterator_cls = _CustomAttributesHintIterator
+    iterator_cls = _CustomPrefetchHintIterator
 
     def __init__(self, hintmap, prefetchs):
         self.hintmap = hintmap
