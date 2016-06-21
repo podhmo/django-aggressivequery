@@ -128,6 +128,26 @@ customer: bar, order: order-2, items: order-2-item-a(10), order-2-item-b(20)"""
             actual = "\n".join(buf)
             self.assertEqual(expected, actual)
 
+    def test_it__prefetch_filter__with__custom_prefetch(self):
+        from django.db.models import Prefetch
+        qs = m.Customer.objects
+        optimized = self._callFUT(qs, ["orders__valuable_items"]).custom_prefetch(
+            orders__valuable_items=Prefetch("items", queryset=m.Item.objects.filter(price__gt=0), to_attr="valuable_items")
+        ).prefetch_filter(orders__valuable_items=lambda qs: qs.filter(price__gt=10))
+
+        with self.assertNumQueries(3):
+            buf = []
+            for customer in optimized:
+                for order in customer.orders.all():
+                    item_desc = ", ".join("{}({})".format(item.name, item.price) for item in order.valuable_items)
+                    buf.append("customer: {}, order: {}, items: {}".format(customer.name, order.name, item_desc))
+            expected = """\
+customer: foo, order: order-1, items: order-1-item-b(20)
+customer: bar, order: order-1, items: order-1-item-b(20)
+customer: bar, order: order-2, items: order-2-item-b(20)"""
+            actual = "\n".join(buf)
+            self.assertEqual(expected, actual)
+
     # skip filter
     def test_it__skip_filter(self):
         qs = m.Customer.objects
