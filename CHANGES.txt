@@ -1,4 +1,20 @@
-- 0.2.0: skipping function support (`AggressiveQuery.skip_filter()`)
-- 0.1.2: gentle type check, in `from_query()`
-- 0.1.1: remove need less join (on prefetch releated)
-- 0.1: first release
+0.3.0:
+- fix bug that duplicated hints are occured
+- fix bug that `get_accessor_name()` method is not used
+- adding extension feature.
+- reimplementing `skip_filter()` as extension
+- implementing `custom_prefetch()` as extension
+- reimplementing `prefetch_filter()` as extension
+- (module separation)
+
+0.2.0:
+- skipping function support (`AggressiveQuery.skip_filter()`)
+
+0.1.2:
+- gentle type check, in `from_query()`
+
+0.1.1
+- remove need less join (on prefetch releated)
+
+0.1
+- first release

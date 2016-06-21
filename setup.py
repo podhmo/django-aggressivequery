@@ -61,7 +61,7 @@ class MyTest(TestCommand):
 
 
 setup(name='django-aggressivequery',
-      version='0.2.0',
+      version='0.3.0',
       description='handling select_related and prefetch_reated, semi-automatically',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
