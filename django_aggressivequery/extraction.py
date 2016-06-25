@@ -58,7 +58,7 @@ class HintMap(object):
             is_reverse_related = False
             rel_model = None
             rel_fk = None
-            if is_relation:
+            if is_relation and not getattr(f, "primary_key", False):
                 if hasattr(f, "rel_class"):
                     is_reverse_related = True
                     rel_name = f.rel.get_accessor_name()
@@ -158,6 +158,10 @@ class HintExtractor(object):
             if prefix == self.ALL:
                 prefix = REL
             for hint, selected in iterator.clone([prefix]):
+                if not hint.is_relation:
+                    hints[hint.name] = hint
+                    continue
+
                 logger.debug("\t\t\tfield %r %r (%r %r)", model.__name__, hint.name, hint.rel_model.__name__, hint.rel_name)
                 k = (model, hint.name)
                 if not selected:
