@@ -96,8 +96,7 @@ def reset_prefetch_related(qs, prefetch_targets):
     new_qs = qs.prefetch_related(None)
     if prefetch_targets:
         new_qs = new_qs.prefetch_related(*prefetch_targets)
-    logger.debug("@prefetch: %r", prefetch_targets)
-    # logger.debug("@prefetch: %r - %r", qs.model.__name__, [{"through": p.prefetch_through, "query": p.queryset.query} for p in prefetch_targets])
+    logger.debug("@prefetch: %r - %r", qs.model.__name__, [{"through": p.prefetch_through, "query_model": p.queryset.model.__name__} for p in prefetch_targets])
     return new_qs
 
 
@@ -294,6 +293,7 @@ default_extension_repository = (
 # todo: cache
 def from_queryset(qs, name_list, more_specific=False,
                   extensions=default_extension_repository):
+    logger.debug("name_list: %s", name_list)
     if not isinstance(name_list, (tuple, list)):
         raise ValueError("name list is only tuple or list type. (['attr'] rather than 'attr')")
     qs = qs.all() if not hasattr(qs, "_clone") else qs
