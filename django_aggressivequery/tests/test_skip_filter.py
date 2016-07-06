@@ -30,3 +30,11 @@ class SkipFilterTests(TestCase):
         aqs = aqs.skip_filter(["customer__karma", "substitute__karma"])
         self.assertIn('INNER JOIN "customer"', str(aqs.query))
         self.assertNotIn('LEFT OUTER JOIN "customerkarma"', str(aqs.query))
+
+    def test_override_by_relation(self):
+        aqs = self._makeOne(m.CustomerKarma.objects.all(), ["point", "customer__name"])
+        self.assertIn('INNER JOIN "customer"', str(aqs.query))
+
+        aqs = self._makeOne(m.CustomerKarma.objects.all(), ["point", "customer__name"])
+        aqs = aqs.skip_filter(["customer"])
+        self.assertNotIn('INNER JOIN "customer"', str(aqs.query))
