@@ -1,3 +1,7 @@
+0.3.1:
+
+- fix bug when unexpected relations are found.
+
 0.3.0:
 - fix bug that duplicated hints are occured
 - fix bug that `get_accessor_name()` method is not used
